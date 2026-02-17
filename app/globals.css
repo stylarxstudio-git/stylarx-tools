@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+/* 1. Register your custom Helvetica fonts */
+@font-face {
+  font-family: 'HelveticaNow-Bold';
+  src: url('/fonts/Helvetica Now Font Family/helveticanowtext-bold-demo.otf') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'HelveticaNow-Black';
+  src: url('/fonts/Helvetica Now Font Family/helveticanowtext-black-demo.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  /* 2. Define the font variables here */
+  --font-helvetica-bold: 'HelveticaNow-Bold', sans-serif;
+  --font-helvetica-black: 'HelveticaNow-Black', sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  
+  /* 3. Map the Tailwind utility names to your variables */
+  --font-helvetica-bold: var(--font-helvetica-bold);
+  --font-helvetica-black: var(--font-helvetica-black);
+  
+  /* Setting the default sans to your Bold version */
+  --font-sans: var(--font-helvetica-bold), ui-sans-serif, system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  /* Set the default body font */
+  font-family: var(--font-helvetica-bold);
+}
