@@ -39,7 +39,7 @@ export default function ToolsPage() {
       name: 'AI HDRI Generator', 
       description: 'Create immersive 360° lighting environments.', 
       credits: 1, 
-      thumbnail: '/HDRI-Tool-Thumbnail.jpg', // Make sure this exists in your public folder
+      thumbnail: '/HDRI-Thumbnail.jpg', // Make sure this exists in your public folder
       path: '/hdri-generator',
       themeColor: '#00D1FF' // Bright Teal/Cyan
     }
