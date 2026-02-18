@@ -1,34 +1,6 @@
-import localFont from 'next/font/local';
 import './globals.css';
 import Script from 'next/script';
 import { UserProvider } from '@/hooks/useUser';
-
-// Define Helvetica Now with your exact .ttf filenames
-const helveticaNow = localFont({
-  src: [
-    {
-      path: '../public/fonts/Helvetica Now Font Family/helveticanowtext-bold-demo.ttf',
-      weight: '700',
-      style: 'normal',
-    },
-    {
-      path: '../public/fonts/Helvetica Now Font Family/helveticanowtext-bolditalic-demo.ttf',
-      weight: '700',
-      style: 'italic',
-    },
-    {
-      path: '../public/fonts/Helvetica Now Font Family/helveticanowtext-black-demo.ttf',
-      weight: '900',
-      style: 'normal',
-    },
-    {
-      path: '../public/fonts/Helvetica Now Font Family/helveticanowtext-blackitalic-demo.ttf',
-      weight: '900',
-      style: 'italic',
-    },
-  ],
-  variable: '--font-helvetica', // This links to your CSS
-});
 
 export const metadata = {
   title: 'STYLARX - AI Tools',
@@ -37,8 +9,12 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={helveticaNow.variable}>
+    <html lang="en">
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+        
         <Script id="outseta-options" strategy="beforeInteractive">
           {`
             var o_options = {
@@ -57,8 +33,7 @@ export default function RootLayout({ children }) {
           strategy="beforeInteractive"
         />
       </head>
-      {/* className={helveticaNow.className} makes it the default font for the whole app */}
-      <body className={`${helveticaNow.className} antialiased`}>
+      <body className="antialiased font-['Poppins',sans-serif]">
         <UserProvider>
           {children}
         </UserProvider>
