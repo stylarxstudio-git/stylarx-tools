@@ -39,9 +39,18 @@ export default function ToolsPage() {
       name: 'AI HDRI Generator', 
       description: 'Create immersive 360° lighting environments.', 
       credits: 1, 
-      thumbnail: '/hdri-generator-thumbnail.jpg', // Make sure this exists in your public folder
+      thumbnail: '/hdri-generator-thumbnail.jpg',
       path: '/hdri-generator',
-      themeColor: '#00D1FF' // Bright Teal/Cyan
+      themeColor: '#00D1FF'
+    },
+    { 
+      id: 'image-to-hdri', 
+      name: 'Image to HDRI', 
+      description: 'Convert any image into a 360° HDRI environment.', 
+      credits: 1, 
+      thumbnail: '/Image-to-HDRI-Thumbnail.jpg',
+      path: '/image-to-hdri',
+      themeColor: '#10B981' // Green
     }
   ];
 
