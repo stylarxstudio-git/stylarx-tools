@@ -60,6 +60,15 @@ export default function ToolsPage() {
       thumbnail: '/Depth-Map-Thumbnail.jpg',
       path: '/depth-map',
       themeColor: '#9333EA'
+    },
+    { 
+      id: 'pbr-maps', 
+      name: 'PBR Map Generator', 
+      description: 'Convert photos into complete PBR texture sets.', 
+      credits: 2, 
+      thumbnail: '/PBR-Maps-Thumbnail.jpg',
+      path: '/pbr-maps',
+      themeColor: '#FF6B35'
     }
   ];
 
@@ -162,7 +171,7 @@ export default function ToolsPage() {
                       </div>
                     )}
                     <span className="ml-auto px-3 py-1 bg-white/10 backdrop-blur-md text-white text-[10px] font-black rounded-full border border-white/10 uppercase tracking-widest shadow-xl">
-                      {tool.credits} Credit
+                      {tool.credits} {tool.credits > 1 ? 'Credits' : 'Credit'}
                     </span>
                   </div>
 
