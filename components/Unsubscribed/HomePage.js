@@ -24,18 +24,6 @@ export default function HomePage() {
     <>
       <MobileHeader />
       <div className="flex min-h-screen bg-white font-['Poppins',sans-serif] overflow-x-hidden">
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="hidden"
-        >
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3 rounded-r-xl shadow-lg">
-            <ChevronLeft 
-              size={24} 
-              className={`transition-transform ${sidebarOpen ? '' : 'rotate-180'}`}
-            />
-          </div>
-        </button>
-
         <aside className="hidden lg:flex w-60 bg-white border-r border-gray-200 flex-col fixed h-screen z-40">
           <div className="p-4 border-b border-gray-100">
             <h1 className="text-lg font-black text-gray-900 flex items-center gap-2">
@@ -88,67 +76,62 @@ export default function HomePage() {
           </div>
         </aside>
 
-        {sidebarOpen && (
-          <div 
-            className="lg:hidden fixed inset-0 bg-black/50 z-30"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
         <div className="flex-1 lg:ml-60 bg-white min-h-screen overflow-x-hidden pt-16 lg:pt-0">
-          <main className="p-3 sm:p-4 lg:p-6 space-y-4 pb-32 max-w-full">
-            <div className="relative bg-[#161618] rounded-2xl overflow-hidden h-45 sm:h-45">
-              <div className="absolute inset-0 flex items-center justify-center px-4">
-                <div className="text-center text-white">
-                  <h3 className="text-sm sm:text-lg font-bold mb-1 sm:mb-2">Unlock the Professional Suite</h3>
-                  <p className="text-xs mb-2 sm:mb-3 opacity-90 hidden sm:block">
-                    Upgrade to access all AI tools
-                  </p>
-                  <a 
-                    href="https://stylarx.com/pricing" 
-                    className="inline-block px-4 sm:px-6 py-1.5 sm:py-2 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-all text-xs sm:text-sm"
-                  >
-                    Subscribe
-                  </a>
-                </div>
+          <main className="p-4 sm:p-6 lg:p-8 space-y-6">
+            
+            {/* Upgrade Banner */}
+            <div className="relative bg-[#161618] rounded-2xl overflow-hidden p-8">
+              <div className="text-center text-white">
+                <h3 className="text-lg sm:text-xl font-bold mb-2">Unlock the Professional Suite</h3>
+                <p className="text-sm mb-4 opacity-90">
+                  Upgrade to access all AI tools
+                </p>
+                <a 
+                  href="https://stylarx.com/pricing" 
+                  className="inline-block px-6 py-2.5 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-all text-sm"
+                >
+                  Subscribe
+                </a>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-              <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200">
-                <p className="text-xs text-gray-600 mb-1">Credits Used</p>
-                <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">0</h3>
-                <p className="text-xs text-gray-500">This Month</p>
+            {/* Stats Grid - 2x2 on desktop, stack on mobile */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl p-4 border border-gray-200 aspect-square flex flex-col justify-center">
+                <p className="text-xs text-gray-600 mb-2">Credits Used</p>
+                <h3 className="text-3xl font-bold text-gray-900">0</h3>
+                <p className="text-xs text-gray-500 mt-1">This Month</p>
               </div>
-              <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200">
-                <p className="text-xs text-gray-600 mb-1">Credits Left</p>
-                <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">0</h3>
-                <p className="text-xs text-gray-500">This Month</p>
+              <div className="bg-white rounded-xl p-4 border border-gray-200 aspect-square flex flex-col justify-center">
+                <p className="text-xs text-gray-600 mb-2">Credits Left</p>
+                <h3 className="text-3xl font-bold text-gray-900">0</h3>
+                <p className="text-xs text-gray-500 mt-1">This Month</p>
               </div>
-              <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200">
-                <p className="text-xs text-gray-600 mb-1">Renewal</p>
-                <h3 className="text-sm sm:text-lg font-bold text-gray-900">--/--/----</h3>
-                <p className="text-xs text-gray-500">&nbsp;</p>
+              <div className="bg-white rounded-xl p-4 border border-gray-200 aspect-square flex flex-col justify-center">
+                <p className="text-xs text-gray-600 mb-2">Renewal</p>
+                <h3 className="text-lg font-bold text-gray-900">--/--/----</h3>
+                <p className="text-xs text-gray-500 mt-1">&nbsp;</p>
               </div>
-              <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200">
-                <p className="text-xs text-gray-600 mb-1">Generations</p>
-                <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">0</h3>
-                <p className="text-xs text-gray-500">This Month</p>
+              <div className="bg-white rounded-xl p-4 border border-gray-200 aspect-square flex flex-col justify-center">
+                <p className="text-xs text-gray-600 mb-2">Generations</p>
+                <h3 className="text-3xl font-bold text-gray-900">0</h3>
+                <p className="text-xs text-gray-500 mt-1">This Month</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-              <div className="lg:col-span-2 bg-white rounded-xl p-4 sm:p-6 border border-gray-200 flex items-center justify-center min-h-[150px]">
+            {/* Top AI Used + Tool Suggestion - Side by side */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-gray-200 flex items-center justify-center min-h-[200px]">
                 <div className="text-center">
-                  <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-2">Top AI Used</h3>
-                  <p className="text-sm sm:text-base text-gray-400 font-medium">
+                  <h3 className="text-base font-bold text-gray-900 mb-2">Top AI Used</h3>
+                  <p className="text-sm text-gray-400 font-medium">
                     Subscribe to see your top used AI
                   </p>
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
-                <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-1">What tool next?</h3>
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <h3 className="text-base font-bold text-gray-900 mb-1">What tool next?</h3>
                 <p className="text-xs text-gray-600 mb-3">I wish there was an AI for...</p>
                 <form onSubmit={async (e) => { 
                   e.preventDefault(); 
@@ -171,27 +154,28 @@ export default function HomePage() {
                     value={suggestion}
                     onChange={(e) => setSuggestion(e.target.value)}
                     placeholder="Your idea..."
-                    className="w-full h-20 sm:h-24 p-2 border border-gray-200 rounded-lg text-xs resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder:text-gray-500"
+                    className="w-full h-24 p-2 border border-gray-200 rounded-lg text-xs resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder:text-gray-500"
                     disabled={isSubmittingSuggestion}
                   ></textarea>
-                  <button type="submit" disabled={isSubmittingSuggestion} className="mt-2 w-full py-1.5 sm:py-2 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 text-xs sm:text-sm">
+                  <button type="submit" disabled={isSubmittingSuggestion} className="mt-2 w-full py-2 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 text-sm">
                     {isSubmittingSuggestion ? 'Sending...' : 'Submit'}
                   </button>
                 </form>
               </div>
             </div>
 
+            {/* Activity Table */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto w-full">
                 <table className="w-full min-w-[600px]">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="px-3 sm:px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Product</th>
-                      <th className="px-3 sm:px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Date</th>
-                      <th className="px-3 sm:px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Time</th>
-                      <th className="px-3 sm:px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Status</th>
-                      <th className="px-3 sm:px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Prompt</th>
-                      <th className="px-3 sm:px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">Action</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Product</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Time</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Prompt</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Action</th>
                     </tr>
                   </thead>
                   <tbody>
