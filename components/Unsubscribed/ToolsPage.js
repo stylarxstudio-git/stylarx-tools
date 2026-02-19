@@ -69,6 +69,15 @@ export default function ToolsPage() {
       thumbnail: '/Image-to-PBR-Thumbnail.jpg',
       path: '/image-to-pbr',
       themeColor: '#FF6B35'
+    },
+    { 
+      id: 'pbr-generator', 
+      name: 'PBR Generator', 
+      description: 'Generate complete PBR materials from text prompts.', 
+      credits: 3, 
+      thumbnail: '/PBR-Generator-Thumbnail.jpg',
+      path: '/pbr-generator',
+      themeColor: '#1700e7'
     }
   ];
 
