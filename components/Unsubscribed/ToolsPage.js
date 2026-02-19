@@ -94,7 +94,7 @@ export default function ToolsPage() {
       name: 'SFX Generator', 
       description: 'Generate studio-quality sound effects from text descriptions.', 
       credits: 1, 
-      thumbnail: '/SFX-Generator-Thumbnail.jpg',
+      thumbnail: '/SFX-Generator-Thumbnail.png',
       path: '/sfx-generator',
       themeColor: '#10B981'
     }
