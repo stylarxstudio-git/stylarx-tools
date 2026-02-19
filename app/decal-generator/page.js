@@ -257,7 +257,7 @@ export default function DecalGenerator() {
         </footer>
       )}
 
-      {/* RESULT BUTTONS */}
+     {/* RESULT BUTTONS */}
       {resultImage && (
         <footer className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-3">
           <button 
@@ -267,14 +267,20 @@ export default function DecalGenerator() {
             <X size={18} className="sm:w-5 sm:h-5" />
             <span>Reset</span>
           </button>
-          
-            href={resultImage}
-            download="decal.png"
+          <button
+            onClick={() => {
+              const link = document.createElement('a');
+              link.href = resultImage;
+              link.download = 'decal.png';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
             className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white hover:bg-gray-100 text-black rounded-xl sm:rounded-2xl transition-all shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
           >
             <Download size={18} className="sm:w-5 sm:h-5" />
             <span>Download PNG</span>
-          </a>
+          </button>
         </footer>
       )}
 
