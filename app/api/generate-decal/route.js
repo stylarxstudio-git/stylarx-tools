@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/response';
+import { NextResponse } from 'next/server';
 import Replicate from 'replicate';
 import { supabase } from '@/lib/supabase';
 
@@ -67,7 +67,7 @@ export async function POST(req) {
 
     // Start generation with Recraft V3
     const prediction = await replicate.predictions.create({
-      version: "40d1ea1df5386c6b1d5c0c8d3c6b03b6c5e8a8a8a8a8a8a8a8a8a8a8a8a8a8a8", // Recraft V3 version
+      version: "40d1ea1df5386c6b1d5c0c8d3c6b03b6c5e8a8a8a8a8a8a8a8a8a8a8a8a8a8a8", // Recraft V3 version - NEEDS TO BE UPDATED
       input: {
         prompt: enhancedPrompt,
         style: "realistic_image",
