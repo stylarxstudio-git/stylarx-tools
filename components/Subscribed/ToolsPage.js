@@ -23,7 +23,7 @@ export default function ToolsPage() {
       credits: 1, 
       thumbnail: '/Gobo-Generator-Thumbnail1.jpg',
       path: '/gobo-generator',
-      themeColor: '#ff0000' 
+      themeColor: '#ffef14' 
     },
     { 
       id: 'scene-stager', 
@@ -50,7 +50,7 @@ export default function ToolsPage() {
       credits: 1, 
       thumbnail: '/Image-to-HDRI-Thumbnail.jpg',
       path: '/image-to-hdri',
-      themeColor: '#10B981' // Green
+      themeColor: '#00ff48'
     }
   ];
 

@@ -50,7 +50,7 @@ export default function ToolsPage() {
       credits: 1, 
       thumbnail: '/Image-to-HDRI-Thumbnail.jpg',
       path: '/image-to-hdri',
-      themeColor: '#10B981' // Green
+      themeColor: '#ffffff' // Green
     }
   ];
 
