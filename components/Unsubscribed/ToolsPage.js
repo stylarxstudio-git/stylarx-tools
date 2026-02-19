@@ -78,6 +78,24 @@ export default function ToolsPage() {
       thumbnail: '/PBR-Generator-Thumbnail.jpg',
       path: '/pbr-generator',
       themeColor: '#1700e7'
+    },
+    { 
+      id: 'decal-generator', 
+      name: 'Decal Generator', 
+      description: 'Generate transparent decals and overlays for 3D, VFX, and design.', 
+      credits: 1, 
+      thumbnail: '/Decal-Generator-Thumbnail.jpg',
+      path: '/decal-generator',
+      themeColor: '#EF4444'
+    },
+    { 
+      id: 'sfx-generator', 
+      name: 'SFX Generator', 
+      description: 'Generate studio-quality sound effects from text descriptions.', 
+      credits: 1, 
+      thumbnail: '/SFX-Generator-Thumbnail.jpg',
+      path: '/sfx-generator',
+      themeColor: '#10B981'
     }
   ];
 

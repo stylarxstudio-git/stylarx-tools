@@ -87,6 +87,15 @@ export default function ToolsPage() {
       thumbnail: '/Decal-Generator-Thumbnail.jpg',
       path: '/decal-generator',
       themeColor: '#EF4444'
+    },
+    { 
+      id: 'sfx-generator', 
+      name: 'SFX Generator', 
+      description: 'Generate studio-quality sound effects from text descriptions.', 
+      credits: 1, 
+      thumbnail: '/SFX-Generator-Thumbnail.jpg',
+      path: '/sfx-generator',
+      themeColor: '#10B981'
     }
   ];
 
