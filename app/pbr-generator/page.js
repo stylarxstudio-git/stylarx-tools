@@ -1,6 +1,6 @@
 'use client';
-import { useState, Suspense } from 'react';
-import { ArrowLeft, Sparkles, Download, X, Package, Wand2 } from 'lucide-react';
+import { useState, Suspense, useRef, useEffect } from 'react';
+import { ArrowLeft, Sparkles, Download, X, Package, Wand2, Info, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 import JSZip from 'jszip';
@@ -31,6 +31,69 @@ function MaterialPreview({ textureUrl }) {
   );
 }
 
+// Custom Dropdown Component
+function CustomDropdown({ label, value, options, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <label className="text-[10px] text-white/40 uppercase tracking-wider mb-1 block">{label}</label>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white text-left focus:outline-none focus:border-white/30 flex items-center justify-between"
+      >
+        <span>{value}</span>
+        <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      
+      {isOpen && (
+        <div 
+          className="absolute bottom-full left-0 right-0 mb-1 bg-black/80 backdrop-blur-xl border border-white/20 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-50 scrollbar-hide"
+          style={{
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+        >
+          <style jsx>{`
+            div::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => {
+                onChange(option);
+                setIsOpen(false);
+              }}
+              className={`w-full px-3 py-2 text-sm text-left transition-all ${
+                value === option 
+                  ? 'bg-white/20 text-white font-bold' 
+                  : 'text-white/70 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PBRGenerator() {
   const router = useRouter();
   const { user, loading } = useUser();
@@ -38,6 +101,7 @@ export default function PBRGenerator() {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState('');
+  const [showSeamlessInfo, setShowSeamlessInfo] = useState(false);
   
   // Settings
   const [resolution, setResolution] = useState('4K');
@@ -57,7 +121,7 @@ export default function PBRGenerator() {
   // Calculate credits needed
   const calculateCredits = () => {
     let credits = 3; // Base
-    if (resolution === '8K') credits += 1;
+    if (resolution === '8K (+1 credit)') credits += 1;
     if (seamless) credits += 1;
     return credits;
   };
@@ -82,7 +146,7 @@ export default function PBRGenerator() {
           userId: user.uid,
           userEmail: user.email,
           step: 'albedo',
-          resolution,
+          resolution: resolution.replace(' (+1 credit)', ''),
           seamless,
           style,
           category,
@@ -113,7 +177,7 @@ export default function PBRGenerator() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: albedoUrl, // Pass albedo as input
+          prompt: albedoUrl,
           step: 'normal',
         }),
       });
@@ -374,6 +438,32 @@ export default function PBRGenerator() {
         </div>
       )}
 
+      {/* SEAMLESS INFO MODAL */}
+      {showSeamlessInfo && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowSeamlessInfo(false)}>
+          <div className="bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl p-6 max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-3">What is Seamless/Tileable?</h3>
+            <p className="text-sm text-white/80 mb-4">
+              Seamless textures have edges that loop perfectly, allowing you to repeat them infinitely without visible seams or lines.
+            </p>
+            <div className="text-sm text-white/70 space-y-2 mb-4">
+              <p><strong>Essential for:</strong></p>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>Game development (floors, walls)</li>
+                <li>3D modeling (large surfaces)</li>
+                <li>Professional rendering</li>
+              </ul>
+            </div>
+            <button 
+              onClick={() => setShowSeamlessInfo(false)}
+              className="w-full py-2 bg-white text-black font-bold rounded-lg hover:bg-gray-100 transition-all"
+            >
+              Got it!
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* BOTTOM PANEL - PROMPT & SETTINGS */}
       {!resultMaps.albedo && (
         <footer className="fixed bottom-0 left-0 w-full z-50 bg-gradient-to-t from-black via-black/95 to-transparent p-4 sm:p-6">
@@ -382,59 +472,45 @@ export default function PBRGenerator() {
             {/* Settings Row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               
-              {/* Category */}
-              <div>
-                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-1 block">Category</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white/30"
-                >
-                  <option>Auto</option>
-                  <option>Wood</option>
-                  <option>Metal</option>
-                  <option>Stone</option>
-                  <option>Fabric</option>
-                  <option>Concrete</option>
-                  <option>Organic</option>
-                </select>
-              </div>
+              {/* Category - Custom Dropdown */}
+              <CustomDropdown
+                label="Material Type"
+                value={category}
+                options={['Auto', 'Wood', 'Metal', 'Stone', 'Brick', 'Concrete', 'Fabric', 'Leather', 'Plastic', 'Ceramic', 'Marble', 'Glass', 'Paper', 'Rust', 'Sand', 'Dirt', 'Moss', 'Ice']}
+                onChange={setCategory}
+              />
 
-              {/* Style */}
-              <div>
-                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-1 block">Style</label>
-                <select
-                  value={style}
-                  onChange={(e) => setStyle(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white/30"
-                >
-                  <option>Photorealistic</option>
-                  <option>Stylized</option>
-                  <option>Hand-painted</option>
-                  <option>Sci-Fi</option>
-                  <option>Fantasy</option>
-                </select>
-              </div>
+              {/* Style - Custom Dropdown */}
+              <CustomDropdown
+                label="Style"
+                value={style}
+                options={['Photorealistic', 'Stylized', 'Hand-painted', 'Cartoon', 'Sci-Fi', 'Fantasy', 'Grunge', 'Clean']}
+                onChange={setStyle}
+              />
 
-              {/* Resolution */}
-              <div>
-                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-1 block">Resolution</label>
-                <select
-                  value={resolution}
-                  onChange={(e) => setResolution(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white/30"
-                >
-                  <option>1K</option>
-                  <option>2K</option>
-                  <option>4K</option>
-                  <option>8K (+1)</option>
-                </select>
-              </div>
+              {/* Resolution - Custom Dropdown */}
+              <CustomDropdown
+                label="Resolution"
+                value={resolution}
+                options={['1K', '2K', '4K', '8K (+1 credit)']}
+                onChange={setResolution}
+              />
 
               {/* Seamless */}
-              <div className="flex items-end">
+              <div className="flex flex-col justify-end">
+                <div className="flex items-center gap-1 mb-1">
+                  <label className="text-[10px] text-white/40 uppercase tracking-wider">Tiling</label>
+                  <button 
+                    onClick={() => setShowSeamlessInfo(true)}
+                    className="p-0.5 hover:bg-white/10 rounded-full transition-all"
+                    type="button"
+                  >
+                    <Info size={10} className="text-white/40" />
+                  </button>
+                </div>
                 <button
                   onClick={() => setSeamless(!seamless)}
+                  type="button"
                   className={`w-full py-2 rounded-lg text-sm font-bold transition-all ${
                     seamless ? 'bg-white text-black' : 'bg-white/5 text-white/50 border border-white/10'
                   }`}
@@ -459,7 +535,7 @@ export default function PBRGenerator() {
               <button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || isGenerating || loading}
-                className="px-8 py-4 bg-white hover:bg-gray-100 text-black font-bold rounded-xl flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl"
+                className="px-8 py-4 bg-white hover:bg-gray-100 text-black font-bold rounded-xl flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl whitespace-nowrap"
               >
                 {isGenerating ? (
                   <>
