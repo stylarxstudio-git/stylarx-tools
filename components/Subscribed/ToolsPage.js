@@ -51,6 +51,15 @@ export default function ToolsPage() {
       thumbnail: '/Image-to-HDRI-Thumbnail.jpg',
       path: '/image-to-hdri',
       themeColor: '#00ff48'
+    },
+    { 
+      id: 'depth-map', 
+      name: 'Depth Map Generator', 
+      description: 'Convert photos into 3D height maps for displacement.', 
+      credits: 1, 
+      thumbnail: '/Depth-Map-Thumbnail.jpg',
+      path: '/depth-map',
+      themeColor: '#9333EA'
     }
   ];
 

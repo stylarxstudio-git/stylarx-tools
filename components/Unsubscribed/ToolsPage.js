@@ -23,7 +23,7 @@ export default function ToolsPage() {
       credits: 1, 
       thumbnail: '/Gobo-Generator-Thumbnail1.jpg',
       path: '/gobo-generator',
-      themeColor: '#ff0000' 
+      themeColor: '#ffef14' 
     },
     { 
       id: 'scene-stager', 
@@ -50,7 +50,16 @@ export default function ToolsPage() {
       credits: 1, 
       thumbnail: '/Image-to-HDRI-Thumbnail.jpg',
       path: '/image-to-hdri',
-      themeColor: '#ffffff' // Green
+      themeColor: '#00ff48'
+    },
+    { 
+      id: 'depth-map', 
+      name: 'Depth Map Generator', 
+      description: 'Convert photos into 3D height maps for displacement.', 
+      credits: 1, 
+      thumbnail: '/Depth-Map-Thumbnail.jpg',
+      path: '/depth-map',
+      themeColor: '#9333EA'
     }
   ];
 
