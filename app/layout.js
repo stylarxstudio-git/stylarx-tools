@@ -1,6 +1,7 @@
 import './globals.css';
 import Script from 'next/script';
 import { UserProvider } from '@/hooks/useUser';
+import Footer from '@/components/Footer';
 
 export const metadata = {
   title: 'STYLARX - AI Tools',
@@ -36,6 +37,7 @@ export default function RootLayout({ children }) {
       <body className="antialiased font-['Poppins',sans-serif]">
         <UserProvider>
           {children}
+          <Footer />
         </UserProvider>
       </body>
     </html>

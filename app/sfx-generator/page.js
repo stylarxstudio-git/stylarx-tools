@@ -1,8 +1,68 @@
 'use client';
-import { useState, useRef } from 'react';
-import { ArrowLeft, Sparkles, Download, X, Volume2, Play, Pause } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { ArrowLeft, Sparkles, Download, X, Volume2, Play, Pause, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
+
+// Custom Dropdown Component with Glassmorphism
+function CustomDropdown({ label, value, options, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">{label}</label>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white text-left focus:outline-none focus:border-white/30 flex items-center justify-between"
+      >
+        <span>{value}</span>
+        <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      
+      {isOpen && (
+        <div 
+          className="absolute bottom-full left-0 right-0 mb-1 bg-black/80 backdrop-blur-xl border border-white/20 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-50"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          <style jsx>{`
+            div::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => { 
+                onChange(option); 
+                setIsOpen(false); 
+              }}
+              className={`w-full px-3 py-2 text-sm text-left transition-all ${
+                value === option 
+                  ? 'bg-white/20 text-white font-bold' 
+                  : 'text-white/70 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SFXGenerator() {
   const router = useRouter();
@@ -17,7 +77,7 @@ export default function SFXGenerator() {
   
   // Settings
   const [category, setCategory] = useState('Weapons');
-  const [duration, setDuration] = useState('full');
+  const [duration, setDuration] = useState('auto');
   const [format, setFormat] = useState('mp3');
 
   // Example prompts by category
@@ -234,131 +294,144 @@ export default function SFXGenerator() {
       {/* BOTTOM PANEL - SETTINGS & PROMPT */}
       {!audioUrl && (
         <footer className="fixed bottom-0 left-0 w-full z-50 bg-gradient-to-t from-black via-black/95 to-transparent p-4 sm:p-6">
-          <div className="max-w-5xl mx-auto space-y-4">
+          <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4 items-end">
             
-            {/* Settings Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* LEFT SIDE - SETTINGS PANEL */}
+            <aside className="w-full lg:w-72 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl order-2 lg:order-1">
+              
+              <h3 className="text-xs text-white/60 uppercase tracking-wider mb-4 font-bold">Settings</h3>
               
               {/* Category Selector */}
-              <div>
-                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Category</label>
-                <select
+              <div className="mb-4">
+                <CustomDropdown
+                  label="Category"
                   value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30"
-                  style={{ colorScheme: 'dark' }}
-                >
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                  options={categories}
+                  onChange={setCategory}
+                />
               </div>
 
               {/* Duration */}
-              <div>
-                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Duration</label>
-                <div className="grid grid-cols-2 gap-2">
+              <div className="mb-4">
+                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block font-bold">Duration</label>
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => setDuration('quick')}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                    className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
                       duration === 'quick' 
-                        ? 'bg-white text-black' 
+                        ? 'bg-white text-black shadow-lg' 
                         : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
                     }`}
                   >
                     Quick
-                    <span className="block text-[9px] opacity-60">3-8s</span>
+                    <span className="block text-[8px] opacity-60 mt-0.5">3-8s</span>
+                  </button>
+                  <button
+                    onClick={() => setDuration('auto')}
+                    className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
+                      duration === 'auto' 
+                        ? 'bg-white text-black shadow-lg' 
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                    }`}
+                  >
+                    Auto
+                    <span className="block text-[8px] opacity-60 mt-0.5">AI</span>
                   </button>
                   <button
                     onClick={() => setDuration('full')}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                    className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
                       duration === 'full' 
-                        ? 'bg-white text-black' 
+                        ? 'bg-white text-black shadow-lg' 
                         : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
                     }`}
                   >
                     Full
-                    <span className="block text-[9px] opacity-60">8-15s</span>
+                    <span className="block text-[8px] opacity-60 mt-0.5">8-15s</span>
                   </button>
                 </div>
               </div>
 
               {/* Format */}
               <div>
-                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Format</label>
+                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block font-bold">Format</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setFormat('mp3')}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                    className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
                       format === 'mp3' 
-                        ? 'bg-white text-black' 
+                        ? 'bg-white text-black shadow-lg' 
                         : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
                     }`}
                   >
                     MP3
-                    <span className="block text-[9px] opacity-60">Smaller</span>
+                    <span className="block text-[8px] opacity-60 mt-0.5">Smaller</span>
                   </button>
                   <button
                     onClick={() => setFormat('wav')}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                    className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
                       format === 'wav' 
-                        ? 'bg-white text-black' 
+                        ? 'bg-white text-black shadow-lg' 
                         : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
                     }`}
                   >
                     WAV
-                    <span className="block text-[9px] opacity-60">Pro</span>
+                    <span className="block text-[8px] opacity-60 mt-0.5">Quality</span>
                   </button>
                 </div>
               </div>
 
-            </div>
+            </aside>
 
-            {/* Example Prompts */}
-            <div>
-              <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Popular in {category}</label>
-              <div className="flex flex-wrap gap-2">
-                {examplePrompts[category].slice(0, 4).map((example, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setPrompt(example)}
-                    className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-white/70 hover:text-white transition-all"
-                  >
-                    {example.length > 40 ? example.slice(0, 40) + '...' : example}
-                  </button>
-                ))}
+            {/* RIGHT SIDE - SUGGESTIONS & PROMPT */}
+            <div className="flex-1 space-y-3 order-1 lg:order-2 w-full">
+              
+              {/* Example Prompts - Above Prompt Bar */}
+              <div>
+                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block font-bold">Popular in {category}</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {examplePrompts[category].slice(0, 4).map((example, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setPrompt(example)}
+                      className="px-3 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-left text-white/70 hover:text-white transition-all truncate"
+                      title={example}
+                    >
+                      {example}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Prompt Input & Generate */}
-            <div className="flex gap-3">
-              <input
-                type="text"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                placeholder="Describe your sound... (e.g., 'cyberpunk pistol reload' or 'magic spell whoosh')"
-                disabled={isGenerating}
-                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-base focus:outline-none focus:border-white/30 placeholder-white/30 disabled:opacity-50"
-              />
-              <button
-                onClick={handleGenerate}
-                disabled={!prompt.trim() || isGenerating || loading}
-                className="px-8 py-4 bg-white hover:bg-gray-100 text-black font-bold rounded-xl flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl whitespace-nowrap"
-              >
-                {isGenerating ? (
-                  <>
-                    <div className="h-5 w-5 border-2 border-black border-t-transparent animate-spin rounded-full" />
-                    <span className="hidden sm:inline">Generating...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={20} />
-                    <span className="hidden sm:inline">1 Credit</span>
-                    <span className="sm:hidden">Gen</span>
-                  </>
-                )}
-              </button>
+              {/* Prompt Input & Generate */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !isGenerating && handleGenerate()}
+                  placeholder="Describe your sound effect..."
+                  disabled={isGenerating}
+                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-base focus:outline-none focus:border-white/30 placeholder-white/30 disabled:opacity-50 backdrop-blur-xl"
+                />
+                <button
+                  onClick={handleGenerate}
+                  disabled={!prompt.trim() || isGenerating || loading}
+                  className="px-6 sm:px-8 py-4 bg-white hover:bg-gray-100 text-black font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl whitespace-nowrap min-w-[140px]"
+                >
+                  {isGenerating ? (
+                    <>
+                      <div className="h-5 w-5 border-2 border-black border-t-transparent animate-spin rounded-full" />
+                      <span className="hidden sm:inline">Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={20} />
+                      <span>1 Credit</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
             </div>
 
           </div>
