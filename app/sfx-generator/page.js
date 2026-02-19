@@ -14,7 +14,65 @@ export default function SFXGenerator() {
   const [generationProgress, setGenerationProgress] = useState('');
   const [audioUrl, setAudioUrl] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState('medium');
+  
+  // Settings
+  const [category, setCategory] = useState('Weapons');
+  const [duration, setDuration] = useState('full');
+  const [format, setFormat] = useState('mp3');
+
+  // Example prompts by category
+  const examplePrompts = {
+    'Weapons': [
+      'Cyberpunk pistol reload with mechanical clicks',
+      'Laser gun charging and firing',
+      'Medieval sword unsheathing with metal ring',
+      'Shotgun pump action reload',
+    ],
+    'Magic': [
+      'Arcane spell casting with ethereal whoosh',
+      'Magic teleportation sound effect',
+      'Healing spell with soft sparkles',
+      'Fire spell ignition and burn',
+    ],
+    'UI': [
+      'Button click with satisfying pop',
+      'Notification ping, friendly tone',
+      'Success sound with ascending chime',
+      'Error beep, warning tone',
+    ],
+    'Footsteps': [
+      'Heavy boots on metal grating',
+      'Sneakers on wet pavement',
+      'High heels on marble floor',
+      'Barefoot on wooden creaking floor',
+    ],
+    'Ambience': [
+      'Distant thunder with rain ambience',
+      'Busy city street with traffic',
+      'Spaceship engine hum, deep',
+      'Wind howling through canyon',
+    ],
+    'Impacts': [
+      'Punch impact with bone crack',
+      'Explosion with debris falling',
+      'Car crash with metal crunch',
+      'Body falling on concrete',
+    ],
+    'Mechanical': [
+      'Sci-fi door opening with hydraulics',
+      'Old elevator ascending with creaks',
+      'Robotic arm movement with servos',
+      'Engine starting and revving',
+    ],
+    'Nature': [
+      'Thunder rumble, close and powerful',
+      'Ocean waves crashing on rocks',
+      'Campfire crackling and popping',
+      'Birds chirping in forest morning',
+    ],
+  };
+
+  const categories = Object.keys(examplePrompts);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !user) {
@@ -34,6 +92,7 @@ export default function SFXGenerator() {
           userId: user.uid,
           userEmail: user.email,
           duration: duration,
+          format: format,
         }),
       });
 
@@ -69,7 +128,7 @@ export default function SFXGenerator() {
     
     const link = document.createElement('a');
     link.href = audioUrl;
-    link.download = `${prompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_')}_sfx.mp3`;
+    link.download = `${prompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_')}_sfx.${format}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -82,20 +141,21 @@ export default function SFXGenerator() {
       <div className="fixed inset-0 z-0 bg-[#0a0a0a]">
         {audioUrl ? (
           <div className="w-full h-full flex items-center justify-center p-4 sm:p-8">
-            <div className="max-w-2xl w-full">
+            <div className="max-w-3xl w-full">
               <div className="relative bg-white/5 rounded-2xl p-8 border border-white/10">
                 
-                {/* Audio Visualizer Effect */}
-                <div className="mb-8 flex items-center justify-center gap-2">
-                  {[...Array(20)].map((_, i) => (
+                {/* Waveform Visualizer */}
+                <div className="mb-8 flex items-end justify-center gap-1 h-32">
+                  {[...Array(50)].map((_, i) => (
                     <div
                       key={i}
-                      className={`w-2 bg-gradient-to-t from-green-500 to-blue-500 rounded-full transition-all ${
+                      className={`w-2 bg-gradient-to-t from-green-500 via-emerald-400 to-teal-300 rounded-full transition-all ${
                         isPlaying ? 'animate-pulse' : ''
                       }`}
                       style={{
-                        height: `${Math.random() * 60 + 20}px`,
-                        animationDelay: `${i * 0.05}s`,
+                        height: `${Math.sin(i * 0.5) * 40 + 50}px`,
+                        animationDelay: `${i * 0.02}s`,
+                        opacity: isPlaying ? 1 : 0.6,
                       }}
                     />
                   ))}
@@ -112,22 +172,29 @@ export default function SFXGenerator() {
                 {/* Play Button */}
                 <button
                   onClick={togglePlay}
-                  className="w-full mb-4 py-6 bg-white/10 hover:bg-white/20 rounded-xl flex items-center justify-center gap-3 transition-all border border-white/10"
+                  className="w-full mb-6 py-6 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 rounded-xl flex items-center justify-center gap-3 transition-all shadow-xl"
                 >
                   {isPlaying ? (
                     <Pause size={32} className="text-white" />
                   ) : (
                     <Play size={32} className="text-white" />
                   )}
-                  <span className="text-xl font-bold">
+                  <span className="text-xl font-bold text-white">
                     {isPlaying ? 'Pause' : 'Play Sound'}
                   </span>
                 </button>
 
                 {/* Prompt Display */}
-                <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
+                <div className="mb-4 p-4 bg-white/5 rounded-lg border border-white/10">
                   <p className="text-xs text-white/40 uppercase tracking-wider mb-2">Generated Sound:</p>
                   <p className="text-white/90 font-medium">{prompt}</p>
+                </div>
+
+                {/* Format Badge */}
+                <div className="flex justify-end">
+                  <span className="px-3 py-1 bg-white/10 text-white/60 text-xs font-bold rounded-full uppercase">
+                    {format.toUpperCase()}
+                  </span>
                 </div>
 
               </div>
@@ -164,31 +231,100 @@ export default function SFXGenerator() {
         </div>
       )}
 
-      {/* BOTTOM PANEL - PROMPT & SETTINGS */}
+      {/* BOTTOM PANEL - SETTINGS & PROMPT */}
       {!audioUrl && (
         <footer className="fixed bottom-0 left-0 w-full z-50 bg-gradient-to-t from-black via-black/95 to-transparent p-4 sm:p-6">
-          <div className="max-w-4xl mx-auto space-y-4">
+          <div className="max-w-5xl mx-auto space-y-4">
             
-            {/* Duration Selector */}
-            <div>
-              <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Duration</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { value: 'short', label: 'Short', time: '~5s' },
-                  { value: 'medium', label: 'Medium', time: '~10s' },
-                  { value: 'long', label: 'Long', time: '~15s' },
-                ].map((opt) => (
+            {/* Settings Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              
+              {/* Category Selector */}
+              <div>
+                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Category</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30"
+                  style={{ colorScheme: 'dark' }}
+                >
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Duration */}
+              <div>
+                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Duration</label>
+                <div className="grid grid-cols-2 gap-2">
                   <button
-                    key={opt.value}
-                    onClick={() => setDuration(opt.value)}
-                    className={`py-3 text-sm font-bold rounded-lg transition-all ${
-                      duration === opt.value 
+                    onClick={() => setDuration('quick')}
+                    className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                      duration === 'quick' 
                         ? 'bg-white text-black' 
                         : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
                     }`}
                   >
-                    {opt.label}
-                    <span className="block text-[10px] opacity-60">{opt.time}</span>
+                    Quick
+                    <span className="block text-[9px] opacity-60">3-8s</span>
+                  </button>
+                  <button
+                    onClick={() => setDuration('full')}
+                    className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                      duration === 'full' 
+                        ? 'bg-white text-black' 
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                    }`}
+                  >
+                    Full
+                    <span className="block text-[9px] opacity-60">8-15s</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Format */}
+              <div>
+                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Format</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setFormat('mp3')}
+                    className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                      format === 'mp3' 
+                        ? 'bg-white text-black' 
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                    }`}
+                  >
+                    MP3
+                    <span className="block text-[9px] opacity-60">Smaller</span>
+                  </button>
+                  <button
+                    onClick={() => setFormat('wav')}
+                    className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                      format === 'wav' 
+                        ? 'bg-white text-black' 
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                    }`}
+                  >
+                    WAV
+                    <span className="block text-[9px] opacity-60">Pro</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Example Prompts */}
+            <div>
+              <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Popular in {category}</label>
+              <div className="flex flex-wrap gap-2">
+                {examplePrompts[category].slice(0, 4).map((example, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setPrompt(example)}
+                    className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-white/70 hover:text-white transition-all"
+                  >
+                    {example.length > 40 ? example.slice(0, 40) + '...' : example}
                   </button>
                 ))}
               </div>
@@ -247,7 +383,7 @@ export default function SFXGenerator() {
             className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white hover:bg-gray-100 text-black rounded-xl sm:rounded-2xl transition-all shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
           >
             <Download size={18} className="sm:w-5 sm:h-5" />
-            <span>Download MP3</span>
+            <span>Download {format.toUpperCase()}</span>
           </button>
         </footer>
       )}
