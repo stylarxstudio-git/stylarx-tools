@@ -62,12 +62,12 @@ export default function ToolsPage() {
       themeColor: '#9333EA'
     },
     { 
-      id: 'pbr-maps', 
-      name: 'PBR Map Generator', 
+      id: 'image-to-pbr', 
+      name: 'Image to PBR', 
       description: 'Convert photos into complete PBR texture sets.', 
       credits: 2, 
-      thumbnail: '/PBR-Maps-Thumbnail.jpg',
-      path: '/pbr-maps',
+      thumbnail: '/Image-to-PBR-Thumbnail.jpg',
+      path: '/image-to-pbr',
       themeColor: '#FF6B35'
     }
   ];
