@@ -60,7 +60,7 @@ function CustomDropdown({ label, value, options, onChange }) {
       
       {isOpen && (
         <div 
-          className="absolute bottom-full left-0 right-0 mb-1 bg-black/80 backdrop-blur-xl border border-white/20 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-50 scrollbar-hide"
+          className="absolute bottom-full left-0 right-0 mb-1 bg-black/80 backdrop-blur-xl border border-white/20 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-50"
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
@@ -320,8 +320,8 @@ export default function PBRGenerator() {
             </Suspense>
           </Canvas>
         ) : resultMaps.albedo ? (
-          <div className="w-full h-full overflow-auto p-4 sm:p-8">
-            <div className="max-w-7xl mx-auto">
+          <div className="w-full h-full flex items-center justify-center p-4 sm:p-8">
+            <div className="max-w-7xl w-full">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 
                 {resultMaps.albedo && (
