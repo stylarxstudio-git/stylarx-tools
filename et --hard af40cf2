@@ -1,0 +1,46 @@
+[33m20707c0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m i went back to the version without preview
+[33m22cb474[m i went back to the version without preview
+[33m3bef361[m i the sub tools page
+[33me2f9968[m i fixed the homepage/toolspage page.js code
+[33m474d90c[m i fixed the homepage/toolspage page.js code
+[33m413c6b5[m i fixed the mobile header
+[33m7b6fe60[m i fixed the home and tools page not loading on mobie view
+[33m29e949f[m i added the new gated version
+[33m3047f4d[m  i added the new gate version
+[33m90d22cf[m  i added the new gate version
+[33maf40cf2[m i added the logos
+[33mcdcc54f[m i fixed the home page for mobile view
+[33me7b916d[m i updated the SFX thumbnail code from JPG to PNG
+[33mb50f71e[m i added thumbnail for decal, SFX, and Depth map tools
+[33m7c00337[m i upadted the home page design for mobile view
+[33m246f6cb[m i added the header for mobile view on every page
+[33m7652355[m i added the header for mobile view
+[33mcbf4019[m i fixed the footer for mobile view
+[33m54bdd2c[m i added the footer
+[33mb22999c[m i added the new update for te SFX
+[33mf7ab0bb[m i added the SFX generator tool
+[33me944980[m i fixed the api bug for decal generator
+[33ma2aa28b[m i added the ui for the decal generator
+[33ma86f2c2[m i added the decal geenrator tool
+[33m577f5a1[m i made the final UI touch to the pbr generator
+[33m2922f7c[m i the last ui touch to the pbr generator
+[33m1a0ab39[m i added the new AI PBR generator
+[33mddcb945[m i made the final touch to the image to pbr ai tool
+[33mc63c879[m i added the new image to pbr image
+[33m11d9a53[m i made the depth map ai tool
+[33mc3464e2[m i made the final UI touch to the image to HDRI
+[33m5bf4eb1[m i added a thumbnail to the image to hdri
+[33mefa638c[m i added the new image to hdri tool
+[33mda49be2[m i changed the hdri thumbnail photo and name
+[33m273cc5d[m i renamed the hdri tool thumbnail
+[33mee5e4b8[m i renamed the hdri tool thumbnail
+[33md50ac10[m i added the scene stager thumbnail
+[33m96dba5d[m Downgrade to Next.js 14 and React 18
+[33ma4677db[m Upgrade to Next.js 15.3.0 to fix CVE
+[33ma7303ee[m Update Next.js to 15.2.4
+[33m1bcefbe[m Merge pull request #1 from stylarxstudio-git/vercel/react-server-components-cve-vu-llow8e
+[33m45aff63[m[33m ([m[1;31morigin/vercel/react-server-components-cve-vu-llow8e[m[33m)[m Fix React Server Components CVE vulnerabilities
+[33m39d47a1[m Add dynamic rendering for all AI tool pages
+[33m8ae63a5[m Fix Tailwind CSS and font configuration - site working perfectly
+[33m81ff5cd[m i hope the thumbail works
+[33m42f0bca[m Clean push for Vercel deployment
