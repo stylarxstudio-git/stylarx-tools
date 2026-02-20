@@ -23,7 +23,9 @@ export default function RootLayout({ children }) {
               tokenStorage: "cookie",
               monitorDom: true,
               auth: {
-                authenticationCallbackUrl: window.location.origin
+                authenticationCallbackUrl: typeof window !== 'undefined' 
+                  ? window.location.origin 
+                  : "https://stylarx.app"
               }
             };
           `}
