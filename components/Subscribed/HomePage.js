@@ -38,7 +38,7 @@ export default function SubscribedHomePage() {
       if (window.Outseta) {
         try {
           const outsetaUser = await window.Outseta.getUser();
-          console.log("👤 Outseta User Loaded:", outsetaUser);
+          console.log("👤 Full Outseta User Object:", outsetaUser);
 
           if (outsetaUser?.Account?.CurrentSubscription) {
             const { getUserCredits, initializeUserCredits } = await import('@/lib/credits');
@@ -72,17 +72,39 @@ export default function SubscribedHomePage() {
               })));
             }
 
-            // FIX: Better date formatting
-            const renewalDate = outsetaUser.Account.CurrentSubscription.RenewalDate 
-              ? new Date(outsetaUser.Account.CurrentSubscription.RenewalDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-              : 'N/A';
+            // FIX: Try multiple date fields
+            const subscription = outsetaUser.Account.CurrentSubscription;
+            console.log("📅 Subscription Object:", subscription);
+            console.log("📅 RenewalDate:", subscription.RenewalDate);
+            console.log("📅 BillingRenewalDate:", subscription.BillingRenewalDate);
+            console.log("📅 EndDate:", subscription.EndDate);
+
+            let renewalDate = 'Not Available';
+            
+            // Try different date fields
+            const dateString = subscription.RenewalDate || subscription.BillingRenewalDate || subscription.EndDate;
+            
+            if (dateString) {
+              try {
+                const date = new Date(dateString);
+                if (!isNaN(date.getTime())) {
+                  renewalDate = date.toLocaleDateString('en-US', { 
+                    month: 'long', 
+                    day: 'numeric'
+                  });
+                  console.log("✅ Parsed Renewal Date:", renewalDate);
+                }
+              } catch (error) {
+                console.error("❌ Date parsing error:", error);
+              }
+            }
 
             setUserData({
               creditsUsed: credits?.credits_used_this_month || 0,
               creditsLeft: credits?.credits_remaining || 0,
               renewalDate: renewalDate,
               totalGenerations: stats?.totalGenerations || 0,
-              plan: outsetaUser.Account.CurrentSubscription.Plan.Name || 'Pro Plan'
+              plan: subscription.Plan?.Name || 'Pro Plan'
             });
           }
         } catch (error) { 

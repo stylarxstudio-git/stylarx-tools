@@ -1,5 +1,5 @@
 'use client';
-import { Home, Wrench, Clock, HelpCircle, LogOut, LogIn, ChevronLeft } from 'lucide-react';
+import { Home, Wrench, Clock, HelpCircle, LogOut, LogIn } from 'lucide-react';
 import { useState } from 'react';
 import Image from 'next/image';
 import { useUser } from '@/hooks/useUser';
@@ -79,21 +79,19 @@ export default function HomePage() {
         <div className="flex-1 lg:ml-60 bg-white min-h-screen overflow-x-hidden pt-16 lg:pt-0">
           <main className="p-3 sm:p-4 lg:p-6 space-y-4 max-w-full">
             
-            {/* Upgrade Banner */}
-            <div className="relative bg-[#161618] rounded-2xl overflow-hidden h-45 sm:h-45">
-              <div className="absolute inset-0 flex items-center justify-center px-4">
-                <div className="text-center text-white">
-                  <h3 className="text-sm sm:text-lg font-bold mb-1 sm:mb-2">Unlock the Professional Suite</h3>
-                  <p className="text-xs mb-2 sm:mb-3 opacity-90 hidden sm:block">
-                    Upgrade to access all AI tools
-                  </p>
-                  <a 
-                    href="https://stylarx.com/pricing" 
-                    className="inline-block px-4 sm:px-6 py-1.5 sm:py-2 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-all text-xs sm:text-sm"
-                  >
-                    Subscribe
-                  </a>
-                </div>
+            {/* Upgrade Banner - BLACK BOX */}
+            <div className="relative bg-[#161618] rounded-2xl overflow-hidden p-6 sm:p-8 min-h-[140px] flex items-center justify-center">
+              <div className="text-center text-white">
+                <h3 className="text-base sm:text-xl font-bold mb-2">Unlock the Professional Suite</h3>
+                <p className="text-sm mb-4 opacity-90">
+                  Upgrade to access all AI tools
+                </p>
+                <a 
+                  href="https://stylarx.com/pricing" 
+                  className="inline-block px-6 py-2.5 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-all text-sm shadow-lg"
+                >
+                  Subscribe Now
+                </a>
               </div>
             </div>
 
@@ -121,7 +119,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Rest of the layout stays the same... */}
+            {/* Top AI Used + Tool Suggestion */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
               <div className="lg:col-span-2 bg-white rounded-xl p-4 sm:p-6 border border-gray-200 flex items-center justify-center min-h-[150px]">
                 <div className="text-center">
@@ -166,6 +164,7 @@ export default function HomePage() {
               </div>
             </div>
 
+            {/* Activity Table */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto w-full">
                 <table className="w-full min-w-[600px]">
