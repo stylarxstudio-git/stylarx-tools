@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
-import { Menu, X, Sparkles, Home, Wrench, Clock, HelpCircle, LogOut, LogIn } from 'lucide-react';
+import { Menu, X, Home, Wrench, Clock, HelpCircle, LogOut, LogIn } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 
@@ -28,11 +29,14 @@ export default function MobileHeader() {
         <div className="flex items-center justify-between px-6 py-4">
           
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tight text-black">
-            <div className="w-8 h-8 bg-black rounded flex items-center justify-center">
-              <Sparkles size={16} className="text-white" />
-            </div>
-            STYLARX
+          <Link href="/" className="flex items-center">
+            <Image 
+              src="/logo.png" 
+              alt="STYLARX Logo" 
+              width={120} 
+              height={120} 
+              className="rounded"
+            />
           </Link>
 
           {/* Hamburger Button */}
@@ -62,12 +66,13 @@ export default function MobileHeader() {
       >
         {/* Menu Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
-          <div className="flex items-center gap-2 font-bold text-xl tracking-tight text-black">
-            <div className="w-8 h-8 bg-black rounded flex items-center justify-center">
-              <Sparkles size={16} className="text-white" />
-            </div>
-            STYLARX
-          </div>
+          <Image 
+            src="/logo.png" 
+            alt="STYLARX Logo" 
+            width={120} 
+            height={120} 
+            className="rounded"
+          />
           <button
             onClick={closeMenu}
             className="p-2 hover:bg-gray-100 rounded-lg transition-all"
@@ -151,7 +156,7 @@ export default function MobileHeader() {
       </div>
 
       {/* Spacer - Prevents content from going under fixed header */}
-      <div className="lg:hidden h-16" />
+      <div className="lg:hidden h-14" />
     </>
   );
 }

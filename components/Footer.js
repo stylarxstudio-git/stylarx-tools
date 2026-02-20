@@ -1,13 +1,14 @@
 'use client';
-import { Twitter, Linkedin, Instagram, ExternalLink, Sparkles } from 'lucide-react';
+import { Twitter, Linkedin, Instagram, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
     /* Desktop: pl-64 for sidebar. Mobile: px-6 for proper padding */
-    <footer className="w-full bg-white border-t border-gray-100 py-12 lg:py-16 px-6 lg:px-8 lg:pl-64 font-['Poppins',sans-serif]">
+    <footer className="w-full bg-white border-t border-gray-100 py-8 px-6 lg:px-8 lg:pl-64 font-['Poppins',sans-serif]">
       <div className="max-w-full mx-auto">
         
         {/* Desktop: flex-row with justify-between. Mobile: flex-col with normal spacing */}
@@ -15,12 +16,15 @@ export default function Footer() {
           
           {/* Section 1: Brand */}
           <div className="flex flex-col w-full lg:w-auto lg:max-w-[260px]">
-            <div className="flex items-center gap-2 font-bold text-xl tracking-tight text-black mb-4">
-               <div className="w-8 h-8 bg-black rounded flex items-center justify-center">
-                  <Sparkles size={16} className="text-white" />
-               </div>
-               STYLARX
-            </div>
+            <Link href="/" className="inline-block mb-4">
+              <Image 
+                src="/logo.png" 
+                alt="STYLARX Logo" 
+                width={140} 
+                height={140} 
+                className="rounded"
+              />
+            </Link>
             <p className="text-sm text-gray-500 mb-6 leading-relaxed font-normal">
               Professional AI-powered tools for 3D artists, game developers, and content creators.
             </p>
@@ -69,23 +73,46 @@ export default function Footer() {
               Stay Updated
             </h3>
             <p className="text-sm text-gray-500 mb-4 font-normal">Get the latest on new AI features.</p>
-            <div className="flex flex-col gap-2">
-              <input 
-                type="email" 
-                placeholder="email@example.com" 
-                className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-100 rounded-lg focus:outline-none focus:ring-1 focus:ring-black font-normal"
-              />
-              <button className="w-full py-2.5 bg-black text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition-all">
-                Subscribe
-              </button>
-            </div>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const email = e.target.email.value;
+              try {
+                const response = await fetch('https://formspree.io/f/xqedqkzv', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    email: email,
+                    _subject: 'New Newsletter Subscription - STYLARX',
+                  }),
+                });
+                if (response.ok) { 
+                  alert('Subscribed! Thanks!'); 
+                  e.target.reset(); 
+                }
+              } catch (error) { 
+                alert('Failed to subscribe.'); 
+              }
+            }}>
+              <div className="flex flex-col gap-2">
+                <input 
+                  type="email"
+                  name="email"
+                  placeholder="email@example.com" 
+                  required
+                  className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-100 rounded-lg focus:outline-none focus:ring-1 focus:ring-black font-normal text-gray-900"
+                />
+                <button type="submit" className="w-full py-2.5 bg-black text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition-all">
+                  Subscribe
+                </button>
+              </div>
+            </form>
           </div>
 
         </div>
 
         {/* Bottom Bar */}
         <div className="pt-6 lg:pt-8 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest text-center md:text-left">
+          <p className="text-[10px] font-semibold text-gray-900 uppercase tracking-widest text-center md:text-left">
             © {currentYear} STYLARX. ALL RIGHTS RESERVED.
           </p>
           <div className="flex gap-6 lg:gap-8 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
