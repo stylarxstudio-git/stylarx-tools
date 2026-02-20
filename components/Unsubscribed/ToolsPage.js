@@ -15,7 +15,6 @@ export default function ToolsPage() {
   const PRO_PLAN_UID = 'y9qbyNWA';
   const FOUNDER_PLAN_UID = '7ma2MXQE';
 
-  // --- COLOR CONTROL CENTER ---
   const tools = [
     { 
       id: 'gobo', 
@@ -97,6 +96,15 @@ export default function ToolsPage() {
       thumbnail: '/SFX-Generator-Thumbnail.png',
       path: '/sfx-generator',
       themeColor: '#10B981'
+    },
+    { 
+      id: 'rig-animation', 
+      name: 'AI Rig Animation', 
+      description: 'Generate skeletal animations from text prompts.', 
+      credits: 2, 
+      thumbnail: '/Rig-Animation-Thumbnail.jpg',
+      path: '/rig-animation',
+      themeColor: '#FF00FF' 
     }
   ];
 
@@ -118,7 +126,6 @@ export default function ToolsPage() {
       <MobileHeader />
       <div className="flex min-h-screen bg-[#F8F9FB] font-['Poppins',sans-serif]">
         
-        {/* MOBILE SIDEBAR TOGGLE - Hidden now, MobileHeader handles it */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className={`hidden lg:hidden fixed top-1/2 -translate-y-1/2 z-50 transition-all ${sidebarOpen ? 'left-60' : 'left-0'}`}
@@ -128,7 +135,6 @@ export default function ToolsPage() {
           </div>
         </button>
 
-        {/* SIDEBAR - Desktop only now */}
         <aside className="hidden lg:flex w-60 bg-white border-r border-gray-200 flex-col fixed h-screen z-40">
           <div className="p-4 border-b border-gray-100">
              <Image src="/logo.png" alt="STYLARX Logo" width={160} height={160} className="rounded" priority />
@@ -160,7 +166,6 @@ export default function ToolsPage() {
 
         {sidebarOpen && <div className="lg:hidden fixed inset-0 bg-black/50 z-30" onClick={() => setSidebarOpen(false)} />}
         
-        {/* MAIN CONTENT */}
         <div className="flex-1 lg:ml-60 overflow-auto pt-16 lg:pt-0">
           <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 sticky top-0 lg:top-0 z-30">
             <div className="relative w-full max-w-sm text-black">
