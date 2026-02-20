@@ -1,12 +1,27 @@
+'use client';
 import './globals.css';
 import Script from 'next/script';
 import { UserProvider } from '@/hooks/useUser';
 import Footer from '@/components/Footer';
+import { useEffect } from 'react';
 
-export const metadata = {
-  title: 'STYLARX - AI Tools',
-  description: 'Professional AI generation tools',
-};
+function ErrorLogger({ children }) {
+  useEffect(() => {
+    // Log all errors to console
+    window.addEventListener('error', (e) => {
+      console.error('💥 ERROR:', e.message, e.filename, e.lineno);
+      alert(`ERROR: ${e.message} at ${e.filename}:${e.lineno}`);
+    });
+
+    // Log unhandled promise rejections
+    window.addEventListener('unhandledrejection', (e) => {
+      console.error('💥 PROMISE REJECTION:', e.reason);
+      alert(`PROMISE ERROR: ${e.reason}`);
+    });
+  }, []);
+
+  return children;
+}
 
 export default function RootLayout({ children }) {
   return (
@@ -37,10 +52,12 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className="antialiased font-['Poppins',sans-serif]">
-        <UserProvider>
-          {children}
-          <Footer />
-        </UserProvider>
+        <ErrorLogger>
+          <UserProvider>
+            {children}
+            <Footer />
+          </UserProvider>
+        </ErrorLogger>
       </body>
     </html>
   );
