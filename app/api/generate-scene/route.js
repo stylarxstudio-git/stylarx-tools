@@ -5,33 +5,30 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
 
+// ... (imports)
+
 export async function POST(req) {
   try {
     const { image, prompt, aspectRatio, predictionId } = await req.json();
 
-    // Check status of existing prediction
     if (predictionId) {
       const prediction = await replicate.predictions.get(predictionId);
       return NextResponse.json(prediction);
     }
 
-    // Start new prediction with FLUX DEV (best quality)
-    const ratioMap = { 
-      landscape: "16:9", 
-      portrait: "9:16", 
-      square: "1:1" 
-    };
+    const ratioMap = { landscape: "16:9", portrait: "9:16", square: "1:1" };
 
     const prediction = await replicate.predictions.create({
-      // FLUX DEV - Latest version (check Replicate for updates)
-      version: "d5b35b8ef5e74c16e7e2ec54f87f0d7c9e05c0b4", // Latest Flux Dev
+      // NEW: This is the FLUX FILL model (supports Image + Prompt)
+      version: "b572236968846c2415d86237199c0b93850b1821035b8630737a90967396696d", 
       input: {
-        prompt: `${prompt}. Professional 3D render, high quality, photorealistic lighting, detailed environment, cinematic composition`,
-        image: image, // Your uploaded 3D model
+        // The image you uploaded (the positioned 3D model)
+        image: image, 
+        // We tell it to keep your model and build the environment
+        prompt: `A professional cinematic scene around this object: ${prompt}. High quality, 8k, photorealistic.`,
         aspect_ratio: ratioMap[aspectRatio] || "1:1",
-        num_inference_steps: 50, // Higher = better quality
-        guidance_scale: 7.5, // How closely to follow prompt
-        num_outputs: 1,
+        guidance_scale: 30, // Higher guidance helps with image-to-image
+        num_inference_steps: 50,
       },
     });
 
