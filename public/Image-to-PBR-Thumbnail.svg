@@ -1,0 +1,319 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="1080" height="1080">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=DM+Sans:wght@300;400;500&amp;display=swap');
+
+      @keyframes mapPulse {
+        0%,100% { opacity: 0.6; }
+        50%      { opacity: 1; }
+      }
+      @keyframes floatUp {
+        0%   { transform: translateY(0);   opacity: 0; }
+        15%  { opacity: 0.9; }
+        85%  { opacity: 0.4; }
+        100% { transform: translateY(-80px); opacity: 0; }
+      }
+      @keyframes orb {
+        0%,100% { opacity: 0.7; r: 3; }
+        50%      { opacity: 1;   r: 5; }
+      }
+      @keyframes ringPulse {
+        0%,100% { stroke-opacity: 0.2; }
+        50%      { stroke-opacity: 0.5; }
+      }
+
+      .map1 { animation: mapPulse 2.8s ease-in-out infinite; }
+      .map2 { animation: mapPulse 2.8s ease-in-out 0.7s infinite; }
+      .map3 { animation: mapPulse 2.8s ease-in-out 1.4s infinite; }
+      .map4 { animation: mapPulse 2.8s ease-in-out 2.1s infinite; }
+      .spark1 { animation: floatUp 6s linear infinite; }
+      .spark2 { animation: floatUp 8s linear 2s infinite; }
+      .spark3 { animation: floatUp 5s linear 4s infinite; }
+      .spark4 { animation: floatUp 7s linear 1s infinite; }
+      .ring1  { animation: ringPulse 4s ease-in-out infinite; }
+      .ring2  { animation: ringPulse 4s ease-in-out 1.5s infinite; }
+    </style>
+
+    <!-- Background -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#0e0b07"/>
+      <stop offset="50%"  stop-color="#171008"/>
+      <stop offset="100%" stop-color="#0b0e18"/>
+    </linearGradient>
+
+    <!-- Center bloom -->
+    <radialGradient id="bloom" cx="50%" cy="44%" r="38%">
+      <stop offset="0%"   stop-color="#3a2408" stop-opacity="1"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+
+    <!-- Gold gradients -->
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#f5c842"/>
+      <stop offset="50%"  stop-color="#e8a020"/>
+      <stop offset="100%" stop-color="#c47a10"/>
+    </linearGradient>
+    <linearGradient id="goldV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#fde87a"/>
+      <stop offset="40%"  stop-color="#f0b830"/>
+      <stop offset="100%" stop-color="#9a5a08"/>
+    </linearGradient>
+    <linearGradient id="whiteV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#b0a8a0"/>
+    </linearGradient>
+
+    <!-- Divider fade -->
+    <linearGradient id="divH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#f0a820" stop-opacity="0"/>
+      <stop offset="30%"  stop-color="#f0a820" stop-opacity="0.6"/>
+      <stop offset="70%"  stop-color="#f0a820" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#f0a820" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Sphere -->
+    <radialGradient id="sphereBase" cx="36%" cy="30%" r="65%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="18%"  stop-color="#ede5d8"/>
+      <stop offset="52%"  stop-color="#8a7460"/>
+      <stop offset="82%"  stop-color="#3a2e22"/>
+      <stop offset="100%" stop-color="#181008"/>
+    </radialGradient>
+    <radialGradient id="sphereRim" cx="88%" cy="65%" r="52%">
+      <stop offset="0%"   stop-color="#f0a020" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+    <radialGradient id="sphereCool" cx="48%" cy="3%" r="42%">
+      <stop offset="0%"   stop-color="#c8e0ff" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+    <radialGradient id="specular" cx="34%" cy="28%" r="20%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.98"/>
+      <stop offset="55%"  stop-color="#fff8e8" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+
+    <!-- Map previews -->
+    <linearGradient id="srcImg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#c8aa80"/>
+      <stop offset="35%"  stop-color="#9a7850"/>
+      <stop offset="65%"  stop-color="#7a5e3a"/>
+      <stop offset="100%" stop-color="#3e2c18"/>
+    </linearGradient>
+    <linearGradient id="normalMap" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#7888cc"/>
+      <stop offset="50%"  stop-color="#8898e0"/>
+      <stop offset="100%" stop-color="#6070b0"/>
+    </linearGradient>
+    <radialGradient id="roughMap" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#c8c0b8"/>
+      <stop offset="100%" stop-color="#3a3028"/>
+    </radialGradient>
+    <radialGradient id="aoMap" cx="50%" cy="50%" r="60%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#111111"/>
+    </radialGradient>
+    <linearGradient id="metalMap" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#1a1a1a"/>
+      <stop offset="50%"  stop-color="#888"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+
+    <!-- Filters -->
+    <filter id="sphereGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="20" result="blur"/>
+      <feFlood flood-color="#e09020" flood-opacity="0.3" result="col"/>
+      <feComposite in="col" in2="blur" operator="in" result="cb"/>
+      <feMerge><feMergeNode in="cb"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="goldGlow" x="-15%" y="-40%" width="130%" height="180%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feFlood flood-color="#f0a820" flood-opacity="0.55" result="col"/>
+      <feComposite in="col" in2="blur" operator="in" result="cb"/>
+      <feMerge><feMergeNode in="cb"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="cardShadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="rgba(0,0,0,0.75)"/>
+    </filter>
+    <filter id="noise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="4" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feBlend in="SourceGraphic" mode="overlay"/>
+    </filter>
+
+    <!-- Clip paths for map cards (170×120) -->
+    <clipPath id="c1"><rect width="170" height="120" rx="8"/></clipPath>
+    <clipPath id="c2"><rect width="170" height="120" rx="8"/></clipPath>
+    <clipPath id="c3"><rect width="170" height="120" rx="8"/></clipPath>
+    <clipPath id="c4"><rect width="170" height="120" rx="8"/></clipPath>
+
+    <!-- Clip for sphere front orbit ring -->
+    <clipPath id="sphereClip"><circle cx="0" cy="0" r="162"/></clipPath>
+  </defs>
+
+  <!-- ══════════════════════════════════════ -->
+  <!--               BACKGROUND              -->
+  <!-- ══════════════════════════════════════ -->
+  <rect width="1080" height="1080" fill="url(#bg)"/>
+  <rect width="1080" height="1080" fill="url(#bloom)"/>
+  <rect width="1080" height="1080" fill="rgba(200,160,80,0.025)" filter="url(#noise)"/>
+
+  <!-- Border lines top/bottom -->
+  <line x1="0" y1="1"    x2="1080" y2="1"    stroke="#f0a820" stroke-width="2" opacity="0.55"/>
+  <line x1="0" y1="1079" x2="1080" y2="1079" stroke="#f0a820" stroke-width="2" opacity="0.55"/>
+  <line x1="1"    y1="0" x2="1"    y2="1080" stroke="#f0a820" stroke-width="2" opacity="0.55"/>
+  <line x1="1079" y1="0" x2="1079" y2="1080" stroke="#f0a820" stroke-width="2" opacity="0.55"/>
+
+  <!-- Corner marks -->
+  <polyline points="1,32 1,1 32,1"         fill="none" stroke="#f0a820" stroke-width="2" opacity="0.7"/>
+  <polyline points="1048,1 1079,1 1079,32" fill="none" stroke="#f0a820" stroke-width="2" opacity="0.7"/>
+  <polyline points="1,1048 1,1079 32,1079" fill="none" stroke="#f0a820" stroke-width="2" opacity="0.7"/>
+  <polyline points="1048,1079 1079,1079 1079,1048" fill="none" stroke="#f0a820" stroke-width="2" opacity="0.7"/>
+
+  <!-- ══════════════════════════════════════ -->
+  <!--            TOP EYEBROW                -->
+  <!-- ══════════════════════════════════════ -->
+  <text x="540" y="68"
+    font-family="'DM Sans', sans-serif" font-size="13" font-weight="500"
+    fill="rgba(240,180,60,0.65)" letter-spacing="5" text-anchor="middle">IMAGE → PBR GENERATOR</text>
+
+  <!-- Thin gold rule under eyebrow -->
+  <rect x="200" y="78" width="680" height="1" fill="url(#divH)" opacity="0.5"/>
+
+  <!-- ══════════════════════════════════════ -->
+  <!--           MAIN TITLE                  -->
+  <!-- ══════════════════════════════════════ -->
+  <!-- "IMAGE" — white, large -->
+  <text x="540" y="200"
+    font-family="'Bebas Neue', Impact, sans-serif" font-size="148"
+    fill="url(#whiteV)" letter-spacing="8" text-anchor="middle" opacity="0.93">IMAGE</text>
+
+  <!-- "TO PBR" — gold, glowing -->
+  <text x="540" y="318"
+    font-family="'Bebas Neue', Impact, sans-serif" font-size="148"
+    fill="url(#goldV)" letter-spacing="8" text-anchor="middle"
+    filter="url(#goldGlow)">TO PBR</text>
+
+  <!-- ══════════════════════════════════════ -->
+  <!--        HORIZONTAL DIVIDER             -->
+  <!-- ══════════════════════════════════════ -->
+  <rect x="60" y="338" width="960" height="1" fill="url(#divH)" opacity="0.45"/>
+
+  <!-- ══════════════════════════════════════ -->
+  <!--    SUBTITLE                           -->
+  <!-- ══════════════════════════════════════ -->
+  <text x="540" y="376"
+    font-family="'DM Sans', sans-serif" font-size="18" font-weight="300"
+    fill="rgba(220,200,155,0.58)" letter-spacing="1" text-anchor="middle">Drop any texture. Get production-ready maps instantly.</text>
+
+  <!-- ══════════════════════════════════════ -->
+  <!--           PBR SPHERE                  -->
+  <!-- ══════════════════════════════════════ -->
+  <g transform="translate(540, 520)" filter="url(#sphereGlow)">
+    <!-- Ground shadow -->
+    <ellipse cx="0" cy="172" rx="128" ry="18" fill="rgba(0,0,0,0.55)"/>
+
+    <!-- Outer orbit rings -->
+    <ellipse class="ring1" cx="0" cy="0" rx="198" ry="44" fill="none" stroke="url(#gold)" stroke-width="1.2" transform="rotate(-18)"/>
+    <ellipse class="ring2" cx="0" cy="0" rx="220" ry="49" fill="none" stroke="url(#gold)" stroke-width="0.6" opacity="0.2" transform="rotate(-18)"/>
+
+    <!-- Sphere layers -->
+    <circle cx="0" cy="0" r="162" fill="url(#sphereBase)"/>
+    <circle cx="0" cy="0" r="162" fill="url(#sphereRim)"/>
+    <circle cx="0" cy="0" r="162" fill="url(#sphereCool)"/>
+    <circle cx="0" cy="0" r="162" fill="url(#specular)"/>
+    <circle cx="0" cy="0" r="162" fill="none" stroke="rgba(240,168,32,0.12)" stroke-width="2"/>
+
+    <!-- Front orbit ring (clipped to sphere) -->
+    <g clip-path="url(#sphereClip)">
+      <ellipse cx="0" cy="0" rx="198" ry="44" fill="none" stroke="url(#gold)" stroke-width="2.2" opacity="0.6" transform="rotate(-18)"/>
+    </g>
+  </g>
+
+  <!-- Floating sparks around sphere -->
+  <circle class="spark1" cx="390" cy="610" r="2"   fill="#f5c842"/>
+  <circle class="spark2" cx="695" cy="570" r="1.5" fill="#e8a020"/>
+  <circle class="spark3" cx="450" cy="640" r="1"   fill="#fde87a"/>
+  <circle class="spark4" cx="650" cy="600" r="2"   fill="#f0a820"/>
+
+  <!-- ══════════════════════════════════════ -->
+  <!--     MAP CARDS — 2×2 GRID              -->
+  <!--  centered, below sphere               -->
+  <!-- ══════════════════════════════════════ -->
+  <!-- Card width 170, height 120, gap 18 -->
+  <!-- Total width: 170+18+170 = 358, start x = (1080-358)/2 = 361 -->
+  <!-- Row 1 top = 722, Row 2 top = 722+120+18 = 860 -->
+
+  <!-- ─── ALBEDO (top-left) ─── -->
+  <g class="map1" transform="translate(361, 720)" filter="url(#cardShadow)">
+    <g clip-path="url(#c1)">
+      <rect width="170" height="120" fill="url(#srcImg)"/>
+      <ellipse cx="50"  cy="45"  rx="48" ry="38" fill="rgba(210,185,145,0.28)"/>
+      <ellipse cx="140" cy="88"  rx="55" ry="40" fill="rgba(50,30,12,0.22)"/>
+    </g>
+    <rect width="170" height="120" rx="8" fill="none" stroke="rgba(240,168,32,0.5)" stroke-width="1.5"/>
+    <!-- bottom label bar -->
+    <rect x="0" y="97" width="170" height="23" fill="rgba(0,0,0,0.62)"/>
+    <text x="85" y="113" font-family="'DM Sans', sans-serif" font-size="10" font-weight="500"
+      fill="#f0c050" text-anchor="middle" letter-spacing="2">ALBEDO</text>
+    <!-- color pip -->
+    <circle cx="156" cy="12" r="5" fill="rgba(240,168,32,0.7)"/>
+  </g>
+
+  <!-- ─── NORMAL (top-right) ─── -->
+  <g class="map2" transform="translate(549, 720)" filter="url(#cardShadow)">
+    <g clip-path="url(#c2)">
+      <rect width="170" height="120" fill="url(#normalMap)"/>
+      <path d="M0,22 Q42,10 85,26 Q128,42 170,22" fill="none" stroke="rgba(170,190,255,0.38)" stroke-width="1.5"/>
+      <path d="M0,50 Q42,38 85,54 Q128,70 170,50" fill="none" stroke="rgba(170,190,255,0.3)" stroke-width="1.5"/>
+      <path d="M0,78 Q42,66 85,82 Q128,98 170,78" fill="none" stroke="rgba(170,190,255,0.22)" stroke-width="1.5"/>
+    </g>
+    <rect width="170" height="120" rx="8" fill="none" stroke="rgba(140,160,240,0.5)" stroke-width="1.5"/>
+    <rect x="0" y="97" width="170" height="23" fill="rgba(0,0,0,0.62)"/>
+    <text x="85" y="113" font-family="'DM Sans', sans-serif" font-size="10" font-weight="500"
+      fill="#a0b0f0" text-anchor="middle" letter-spacing="2">NORMAL</text>
+    <circle cx="156" cy="12" r="5" fill="rgba(140,160,240,0.7)"/>
+  </g>
+
+  <!-- ─── ROUGHNESS (bottom-left) ─── -->
+  <g class="map3" transform="translate(361, 858)" filter="url(#cardShadow)">
+    <g clip-path="url(#c3)">
+      <rect width="170" height="120" fill="url(#roughMap)"/>
+      <rect width="170" height="120" fill="rgba(200,190,180,0.06)" filter="url(#noise)"/>
+    </g>
+    <rect width="170" height="120" rx="8" fill="none" stroke="rgba(200,190,165,0.45)" stroke-width="1.5"/>
+    <rect x="0" y="97" width="170" height="23" fill="rgba(0,0,0,0.62)"/>
+    <text x="85" y="113" font-family="'DM Sans', sans-serif" font-size="10" font-weight="500"
+      fill="#d0c8b5" text-anchor="middle" letter-spacing="2">ROUGHNESS</text>
+    <circle cx="156" cy="12" r="5" fill="rgba(200,190,165,0.7)"/>
+  </g>
+
+  <!-- ─── AO (bottom-right) ─── -->
+  <g class="map4" transform="translate(549, 858)" filter="url(#cardShadow)">
+    <g clip-path="url(#c4)">
+      <rect width="170" height="120" fill="url(#aoMap)"/>
+    </g>
+    <rect width="170" height="120" rx="8" fill="none" stroke="rgba(170,170,170,0.35)" stroke-width="1.5"/>
+    <rect x="0" y="97" width="170" height="23" fill="rgba(0,0,0,0.62)"/>
+    <text x="85" y="113" font-family="'DM Sans', sans-serif" font-size="10" font-weight="500"
+      fill="#b0b0b0" text-anchor="middle" letter-spacing="2">AMB. OCCLUSION</text>
+    <circle cx="156" cy="12" r="5" fill="rgba(170,170,170,0.6)"/>
+  </g>
+
+  <!-- Dashed connector lines sphere → cards -->
+  <g stroke="url(#gold)" stroke-width="1" fill="none" stroke-dasharray="4 4" opacity="0.2">
+    <line x1="480" y1="682" x2="446" y2="718"/>
+    <line x1="600" y1="682" x2="634" y2="718"/>
+    <line x1="450" y1="682" x2="440" y2="856"/>
+    <line x1="630" y1="682" x2="640" y2="856"/>
+  </g>
+
+  <!-- ══════════════════════════════════════ -->
+  <!--     BOTTOM APP COMPAT BAR             -->
+  <!-- ══════════════════════════════════════ -->
+  <rect x="0" y="1028" width="1080" height="50" fill="rgba(0,0,0,0.55)"/>
+  <line x1="0" y1="1028" x2="1080" y2="1028" stroke="rgba(240,168,32,0.28)" stroke-width="1"/>
+  <text x="540" y="1059"
+    font-family="'DM Sans', sans-serif" font-size="11" font-weight="400"
+    fill="rgba(200,170,90,0.45)" letter-spacing="3.5" text-anchor="middle">BLENDER · UNREAL · UNITY · MAYA · CINEMA 4D</text>
+</svg>
