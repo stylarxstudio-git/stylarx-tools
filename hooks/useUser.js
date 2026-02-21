@@ -9,85 +9,72 @@ export function UserProvider({ children }) {
 
   useEffect(() => {
     const loadUser = async () => {
-      // Wait for Outseta with timeout
-      const waitForOutseta = () => {
-        return new Promise((resolve) => {
-          const timeout = setTimeout(() => {
-            console.warn('Outseta timeout - proceeding without user');
-            resolve(false);
-          }, 3000); // 3 second timeout
-
-          if (window.Outseta) {
-            clearTimeout(timeout);
-            resolve(true);
-          } else {
-            const checkInterval = setInterval(() => {
-              if (window.Outseta) {
-                clearInterval(checkInterval);
-                clearTimeout(timeout);
-                resolve(true);
-              }
-            }, 100);
-          }
-        });
-      };
+      const timeout = setTimeout(() => {
+        setLoading(false);
+      }, 1000);
 
       try {
-        const outsetaLoaded = await waitForOutseta();
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        if (!outsetaLoaded) {
-          setLoading(false);
-          return;
-        }
-        
-        const outsetaUser = await window.Outseta.getUser();
-        
-        if (outsetaUser) {
-          let renewalDate = null;
-          if (outsetaUser?.Account?.CurrentSubscription?.RenewalDate) {
-            try {
-              const date = new Date(outsetaUser.Account.CurrentSubscription.RenewalDate);
-              renewalDate = date.toLocaleDateString('en-US', { 
-                month: 'long', 
-                day: 'numeric'
-              });
-            } catch (e) {
-              console.error('Error parsing renewal date:', e);
+        if (window.Outseta) {
+          const outsetaUser = await window.Outseta.getUser();
+          if (outsetaUser) {
+            let renewalDate = null;
+            if (outsetaUser?.Account?.CurrentSubscription?.RenewalDate) {
+              try {
+                const date = new Date(outsetaUser.Account.CurrentSubscription.RenewalDate);
+                renewalDate = date.toLocaleDateString('en-US', { 
+                  month: 'long', 
+                  day: 'numeric'
+                });
+              } catch (e) {
+                console.error('Error parsing renewal date:', e);
+              }
             }
+            
+            setUser({
+              email: outsetaUser.Email,
+              name: `${outsetaUser.FirstName} ${outsetaUser.LastName}`,
+              uid: outsetaUser.Uid,
+              planUid: outsetaUser?.Account?.CurrentSubscription?.Plan?.Uid,
+              renewalDate: renewalDate,
+            });
+            setLoading(false);
+            clearTimeout(timeout);
+          } else {
+            // No user logged in
+            setUser(null);
+            setLoading(false);
+            clearTimeout(timeout);
           }
-          
-          setUser({
-            email: outsetaUser.Email,
-            name: `${outsetaUser.FirstName} ${outsetaUser.LastName}`,
-            uid: outsetaUser.Uid,
-            planUid: outsetaUser?.Account?.CurrentSubscription?.Plan?.Uid,
-            renewalDate: renewalDate,
-          });
         }
       } catch (error) {
         console.error('Error loading user:', error);
       } finally {
+        clearTimeout(timeout);
         setLoading(false);
       }
     };
 
     loadUser();
 
-    // Listen for Outseta auth changes
-    const handleLogin = () => loadUser();
-    const handleLogout = () => setUser(null);
-
+    // SYNC FIX: Listen for Outseta login/logout events
     if (window.Outseta) {
-      window.Outseta.on('auth.login', handleLogin);
-      window.Outseta.on('auth.logout', handleLogout);
-    }
+      const handleAuthChange = () => {
+        loadUser();
+      };
 
-    return () => {
-      if (window.Outseta) {
-        window.Outseta.off('auth.login', handleLogin);
-        window.Outseta.off('auth.logout', handleLogout);
-      }
-    };
+      window.Outseta.on('auth.login', handleAuthChange);
+      window.Outseta.on('auth.logout', () => {
+        setUser(null);
+      });
+
+      // Cleanup
+      return () => {
+        window.Outseta.off('auth.login', handleAuthChange);
+        window.Outseta.off('auth.logout', () => setUser(null));
+      };
+    }
   }, []);
 
   async function logout() {
