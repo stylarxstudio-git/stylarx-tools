@@ -9,16 +9,23 @@ export function UserProvider({ children }) {
 
   useEffect(() => {
     const loadUser = async () => {
-      // Wait for Outseta to be ready
+      // Wait for Outseta with timeout
       const waitForOutseta = () => {
         return new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            console.warn('Outseta timeout - proceeding without user');
+            resolve(false);
+          }, 3000); // 3 second timeout
+
           if (window.Outseta) {
-            resolve();
+            clearTimeout(timeout);
+            resolve(true);
           } else {
             const checkInterval = setInterval(() => {
               if (window.Outseta) {
                 clearInterval(checkInterval);
-                resolve();
+                clearTimeout(timeout);
+                resolve(true);
               }
             }, 100);
           }
@@ -26,7 +33,12 @@ export function UserProvider({ children }) {
       };
 
       try {
-        await waitForOutseta();
+        const outsetaLoaded = await waitForOutseta();
+        
+        if (!outsetaLoaded) {
+          setLoading(false);
+          return;
+        }
         
         const outsetaUser = await window.Outseta.getUser();
         
@@ -62,17 +74,18 @@ export function UserProvider({ children }) {
     loadUser();
 
     // Listen for Outseta auth changes
+    const handleLogin = () => loadUser();
+    const handleLogout = () => setUser(null);
+
     if (window.Outseta) {
-      window.Outseta.on('auth.login', loadUser);
-      window.Outseta.on('auth.logout', () => {
-        setUser(null);
-      });
+      window.Outseta.on('auth.login', handleLogin);
+      window.Outseta.on('auth.logout', handleLogout);
     }
 
     return () => {
       if (window.Outseta) {
-        window.Outseta.off('auth.login', loadUser);
-        window.Outseta.off('auth.logout', () => setUser(null));
+        window.Outseta.off('auth.login', handleLogin);
+        window.Outseta.off('auth.logout', handleLogout);
       }
     };
   }, []);
