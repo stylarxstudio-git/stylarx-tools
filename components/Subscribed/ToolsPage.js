@@ -66,7 +66,7 @@ export default function ToolsPage() {
       name: 'Image to PBR', 
       description: 'Convert photos into complete PBR texture sets.', 
       credits: 2, 
-      thumbnail: '/Image-to-PBR-Thumbnail.jpg',
+      thumbnail: '/Image-to-PBR-Thumbnail.png',
       path: '/image-to-pbr',
       themeColor: '#FF6B35'
     },
