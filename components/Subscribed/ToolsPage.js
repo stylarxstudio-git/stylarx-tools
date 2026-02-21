@@ -75,7 +75,7 @@ export default function ToolsPage() {
       name: 'PBR Generator', 
       description: 'Generate complete PBR materials from text prompts.', 
       credits: 3, 
-      thumbnail: '/PBR-Generator-Thumbnail.jpg',
+      thumbnail: '/PBR-Generator-Thumbnail.png',
       path: '/pbr-generator',
       themeColor: '#1700e7'
     },
