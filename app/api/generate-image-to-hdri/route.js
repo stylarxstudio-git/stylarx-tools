@@ -10,34 +10,37 @@ export async function POST(req) {
       auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    // If checking status
     if (predictionId) {
       const prediction = await replicate.predictions.get(predictionId);
       return NextResponse.json(prediction);
     }
 
-    // Check credits
-    if (supabase) {
-      const { data: userCredits } = await supabase
+    // FIXED: Check credits properly
+    if (supabase && userId) {
+      const { data: userCredits, error } = await supabase
         .from('users')
         .select('credits_remaining')
         .eq('outseta_uid', userId)
         .single();
+
+      if (error) {
+        console.error('Credit check error:', error);
+      }
 
       if (!userCredits || userCredits.credits_remaining < 1) {
         return NextResponse.json({ error: 'Insufficient credits' }, { status: 402 });
       }
     }
 
-    // Start prediction
+    // FIXED: Using SDXL for panorama generation
     const prediction = await replicate.predictions.create({
-      version: "854e8727697a057c525cdb45ab037f64ecca770a1769cc52287c2e56472a247b",
+      version: "39ed52f2a78e934b3ba6e2a89f5b1d712de7dfea535525255b1aa35c5565e08b",
       input: {
         image: image,
         prompt: "360 degree equirectangular HDRI panorama, photorealistic environment lighting, high dynamic range, seamless wrap-around view",
-        num_outputs: 1,
-        aspect_ratio: "21:9",
-        output_format: "png",
+        prompt_strength: 0.7,
+        num_inference_steps: 50,
+        guidance_scale: 7.5,
       },
     });
 

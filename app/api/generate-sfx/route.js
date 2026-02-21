@@ -1,17 +1,32 @@
 import { NextResponse } from 'next/server';
+import Replicate from 'replicate';
 import { supabase } from '@/lib/supabase';
 
 export async function POST(req) {
   try {
-    const { prompt, userId, userEmail, duration } = await req.json();
+    const { prompt, userId, userEmail, duration, predictionId } = await req.json();
 
-    // Check credits (1 credit required)
-    if (supabase) {
-      const { data: userCredits } = await supabase
+    const replicate = new Replicate({
+      auth: process.env.REPLICATE_API_TOKEN,
+    });
+
+    // Check status
+    if (predictionId) {
+      const prediction = await replicate.predictions.get(predictionId);
+      return NextResponse.json(prediction);
+    }
+
+    // Check credits
+    if (supabase && userId) {
+      const { data: userCredits, error } = await supabase
         .from('users')
         .select('credits_remaining')
         .eq('outseta_uid', userId)
         .single();
+
+      if (error) {
+        console.error('Credit check error:', error);
+      }
 
       if (!userCredits || userCredits.credits_remaining < 1) {
         return NextResponse.json({ 
@@ -20,60 +35,27 @@ export async function POST(req) {
       }
     }
 
-    // Build enhanced prompt with duration hint
-    let enhancedPrompt = prompt;
-    
-    // Add duration context
-    const durationSeconds = duration === 'short' ? 5 : duration === 'medium' ? 10 : 15;
-    
-    // Call ElevenLabs API
-    const response = await fetch('https://api.elevenlabs.io/v1/sound-generation', {
-      method: 'POST',
-      headers: {
-        'xi-api-key': process.env.ELEVENLABS_API_KEY,
-        'Content-Type': 'application/json',
+    // Map duration to seconds
+    const durationMap = {
+      'quick': 5,
+      'auto': 10,
+      'full': 15
+    };
+
+    // Use AudioLDM 2 for sound generation
+    const prediction = await replicate.predictions.create({
+      version: "b61392adecdd660326fc9cfc5398182437dbe5e97b5decfb36e1a36de5b8666f",
+      input: {
+        prompt: prompt,
+        duration: durationMap[duration] || 10,
+        num_inference_steps: 200,
+        audio_length_in_s: durationMap[duration] || 10,
       },
-      body: JSON.stringify({
-        text: enhancedPrompt,
-        duration_seconds: durationSeconds,
-        prompt_influence: 0.3,
-      }),
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail?.message || 'Sound generation failed');
-    }
-
-    // Get the audio data
-    const audioBuffer = await response.arrayBuffer();
-    const audioBase64 = Buffer.from(audioBuffer).toString('base64');
-    const audioUrl = `data:audio/mpeg;base64,${audioBase64}`;
-
-    // Deduct credits and save generation
-    if (supabase) {
-      await supabase
-        .from('users')
-        .update({ 
-          credits_remaining: userCredits.credits_remaining - 1 
-        })
-        .eq('outseta_uid', userId);
-
-      await supabase
-        .from('generations')
-        .insert({
-          outseta_uid: userId,
-          tool_name: 'SFX Generator',
-          prompt: prompt,
-          image_url: null, // No image for audio
-          credits_used: 1,
-          created_at: new Date().toISOString(),
-        });
-    }
-
     return NextResponse.json({ 
-      audioUrl: audioUrl,
-      success: true 
+      predictionId: prediction.id, 
+      status: prediction.status 
     });
 
   } catch (error) {
@@ -81,3 +63,12 @@ export async function POST(req) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+```
+
+---
+
+## **NOW ADD MOTORICA API KEY:**
+
+Go to https://motorica.ai and sign up, then add to `.env.local`:
+```
+MOTORICA_API_KEY=your_real_motorica_key_here

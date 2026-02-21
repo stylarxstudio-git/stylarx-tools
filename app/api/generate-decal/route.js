@@ -10,13 +10,11 @@ export async function POST(req) {
       auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    // If checking status of existing prediction
     if (predictionId) {
       const prediction = await replicate.predictions.get(predictionId);
       return NextResponse.json(prediction);
     }
 
-    // Check credits (1 credit required)
     if (supabase) {
       const { data: userCredits } = await supabase
         .from('users')
@@ -31,10 +29,8 @@ export async function POST(req) {
       }
     }
 
-    // Build enhanced prompt
     let enhancedPrompt = prompt;
 
-    // Add decal type context
     const decalTypeKeywords = {
       'Crack': 'cracked surface, fracture lines, broken texture',
       'Leak': 'liquid drip, stain, running fluid',
@@ -52,7 +48,6 @@ export async function POST(req) {
       enhancedPrompt = `${decalTypeKeywords[decalType] || ''} ${prompt}`;
     }
 
-    // Add style keywords
     const styleKeywords = {
       'Realistic': 'photorealistic, highly detailed, 8K, professional',
       'Stylized': 'stylized, artistic, clean edges',
@@ -61,18 +56,20 @@ export async function POST(req) {
     };
 
     enhancedPrompt += `, ${styleKeywords[style] || styleKeywords['Realistic']}`;
-
-    // Critical for transparency
     enhancedPrompt += ', isolated object, decal, transparent background, no background, floating object, sticker style';
 
-    // Start generation with Recraft V3
+    // FIXED: Using SDXL with refiner
     const prediction = await replicate.predictions.create({
-      version: "40d1ea1df5386c6b1d5c0c8d3c6b03b6c5e8a8a8a8a8a8a8a8a8a8a8a8a8a8a8", // Recraft V3 version - NEEDS TO BE UPDATED
+      version: "39ed52f2a78e934b3ba6e2a89f5b1d712de7dfea535525255b1aa35c5565e08b",
       input: {
         prompt: enhancedPrompt,
-        style: "realistic_image",
-        output_format: "png",
-        aspect_ratio: "1:1",
+        negative_prompt: "background, scene, environment, landscape, blurry, low quality",
+        width: 1024,
+        height: 1024,
+        num_outputs: 1,
+        scheduler: "K_EULER",
+        guidance_scale: 7.5,
+        num_inference_steps: 30,
       },
     });
 

@@ -10,13 +10,11 @@ export async function POST(req) {
       auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    // If checking status
     if (predictionId) {
       const prediction = await replicate.predictions.get(predictionId);
       return NextResponse.json(prediction);
     }
 
-    // Check credits
     if (supabase) {
       const { data: userCredits } = await supabase
         .from('users')
@@ -29,9 +27,9 @@ export async function POST(req) {
       }
     }
 
-    // Start prediction with Depth-Anything-V2
+    // FIXED: Correct Depth-Anything-V2 version
     const prediction = await replicate.predictions.create({
-      version: "3d62e18c9e6171b0d175a1287f85970f7e04e15d39c0f8c9e9c2e6e5d7a3f3f9",
+      version: "fca7e7e6e172430ec4941e4f9502e0d0c7eedf94ac3dc58e31c1f8b22b27bb6a",
       input: {
         image: image,
       },

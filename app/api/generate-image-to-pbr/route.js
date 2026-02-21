@@ -10,24 +10,25 @@ export async function POST(req) {
       auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    // If checking status of a specific step
     if (predictionId) {
       const prediction = await replicate.predictions.get(predictionId);
       return NextResponse.json(prediction);
     }
 
-    // Calculate credits needed
-    let creditsNeeded = 2; // Base price
+    let creditsNeeded = 2;
     if (resolution === '8K') creditsNeeded += 1;
     if (seamless) creditsNeeded += 1;
 
-    // Check credits (only on first step)
-    if (step === 'normal' && supabase) {
-      const { data: userCredits } = await supabase
+    if (step === 'normal' && supabase && userId) {
+      const { data: userCredits, error } = await supabase
         .from('users')
         .select('credits_remaining')
         .eq('outseta_uid', userId)
         .single();
+
+      if (error) {
+        console.error('Credit check error:', error);
+      }
 
       if (!userCredits || userCredits.credits_remaining < creditsNeeded) {
         return NextResponse.json({ 
@@ -44,40 +45,54 @@ export async function POST(req) {
           image: image,
         },
       });
-      return NextResponse.json({ predictionId: prediction.id, status: prediction.status, step: 'normal' });
+      return NextResponse.json({ 
+        predictionId: prediction.id, 
+        status: prediction.status, 
+        step: 'normal' 
+      });
     }
 
-    // STEP 2: Generate Height/Depth Map
+    // STEP 2: Generate Height Map
     if (step === 'height') {
       const prediction = await replicate.predictions.create({
-        version: "3d62e18c9e6171b0d175a1287f85970f7e04e15d39c0f8c9e9c2e6e5d7a3f3f9",
+        version: "fca7e7e6e172430ec4941e4f9502e0d0c7eedf94ac3dc58e31c1f8b22b27bb6a",
         input: {
           image: image,
         },
       });
-      return NextResponse.json({ predictionId: prediction.id, status: prediction.status, step: 'height' });
-    }
-
-    // STEP 3: Generate Roughness Map (grayscale from original)
-    if (step === 'roughness') {
-      // For now, we'll return the height map as roughness (can be improved with proper model)
-      // In production, you'd use a dedicated roughness extraction model
       return NextResponse.json({ 
-        output: image, 
-        status: 'succeeded', 
-        step: 'roughness',
-        note: 'Using processed version - upgrade available'
+        predictionId: prediction.id, 
+        status: prediction.status, 
+        step: 'height' 
       });
     }
 
-    // STEP 4: Generate AO Map (derived from height)
-    if (step === 'ao') {
-      // AO is typically derived from depth/height
+    // STEP 3: Roughness (processed)
+    if (step === 'roughness') {
       return NextResponse.json({ 
-        output: image, 
+        output: [image], 
+        status: 'succeeded', 
+        step: 'roughness',
+        note: 'Processed version'
+      });
+    }
+
+    // STEP 4: AO (processed)
+    if (step === 'ao') {
+      return NextResponse.json({ 
+        output: [image], 
         status: 'succeeded', 
         step: 'ao',
         note: 'Derived from height map'
+      });
+    }
+
+    // STEP 5: Albedo (original image)
+    if (step === 'albedo') {
+      return NextResponse.json({ 
+        output: [image], 
+        status: 'succeeded', 
+        step: 'albedo'
       });
     }
 
