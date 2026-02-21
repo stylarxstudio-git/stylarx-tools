@@ -91,7 +91,7 @@ export async function POST(req) {
     // STEP 2: Generate Normal Map from Albedo
     if (step === 'normal') {
       const prediction = await replicate.predictions.create({
-        version: "fca7e7e6e172430ec4941e4f9502e0d0c7eedf94ac3dc58e31c1f8b22b27bb6a",
+        version: "6e31c31b0fbbe03993d941e77657a4d0e6e0925c989685eb98dcb14b9302fc54",
         input: {
           image: prompt, // In this case, 'prompt' is the albedo image URL
         },
@@ -102,7 +102,7 @@ export async function POST(req) {
     // STEP 3: Generate Height Map from Albedo
     if (step === 'height') {
       const prediction = await replicate.predictions.create({
-        version: "fca7e7e6e172430ec4941e4f9502e0d0c7eedf94ac3dc58e31c1f8b22b27bb6a",
+        version: "6e31c31b0fbbe03993d941e77657a4d0e6e0925c989685eb98dcb14b9302fc54",
         input: {
           image: prompt, // Albedo image URL
         },

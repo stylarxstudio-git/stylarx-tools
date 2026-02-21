@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import Replicate from 'replicate';
-import { supabase } from '@/lib/supabase';
 
 export async function POST(req) {
   try {
@@ -13,20 +12,6 @@ export async function POST(req) {
     if (predictionId) {
       const prediction = await replicate.predictions.get(predictionId);
       return NextResponse.json(prediction);
-    }
-
-    if (supabase) {
-      const { data: userCredits } = await supabase
-        .from('users')
-        .select('credits_remaining')
-        .eq('outseta_uid', userId)
-        .single();
-
-      if (!userCredits || userCredits.credits_remaining < 1) {
-        return NextResponse.json({ 
-          error: 'Insufficient credits. This generation requires 1 credit.' 
-        }, { status: 402 });
-      }
     }
 
     let enhancedPrompt = prompt;
@@ -58,28 +43,23 @@ export async function POST(req) {
     enhancedPrompt += `, ${styleKeywords[style] || styleKeywords['Realistic']}`;
     enhancedPrompt += ', isolated object, decal, transparent background, no background, floating object, sticker style';
 
-    // FIXED: Using SDXL with refiner
     const prediction = await replicate.predictions.create({
-      version: "39ed52f2a78e934b3ba6e2a89f5b1d712de7dfea535525255b1aa35c5565e08b",
+      version: "7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
       input: {
         prompt: enhancedPrompt,
         negative_prompt: "background, scene, environment, landscape, blurry, low quality",
         width: 1024,
         height: 1024,
         num_outputs: 1,
-        scheduler: "K_EULER",
+        num_inference_steps: 25,
         guidance_scale: 7.5,
-        num_inference_steps: 30,
+        refine: "expert_ensemble_refiner",
       },
     });
 
-    return NextResponse.json({ 
-      predictionId: prediction.id, 
-      status: prediction.status 
-    });
-
+    return NextResponse.json(prediction);
   } catch (error) {
-    console.error('Decal Generator Error:', error);
+    console.error('Decal generation error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
