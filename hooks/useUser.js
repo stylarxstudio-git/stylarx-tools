@@ -1,67 +1,87 @@
 'use client';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 const UserContext = createContext();
 
 export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
     const loadUser = async () => {
-      const timeout = setTimeout(() => {
-        setLoading(false);
-      }, 1000);
+      // Wait for Outseta to be ready
+      const waitForOutseta = () => {
+        return new Promise((resolve) => {
+          if (window.Outseta) {
+            resolve();
+          } else {
+            const checkInterval = setInterval(() => {
+              if (window.Outseta) {
+                clearInterval(checkInterval);
+                resolve();
+              }
+            }, 100);
+          }
+        });
+      };
 
       try {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await waitForOutseta();
         
-        if (window.Outseta) {
-          const outsetaUser = await window.Outseta.getUser();
-          if (outsetaUser) {
-            // Get renewal date
-            let renewalDate = null;
-            if (outsetaUser?.Account?.CurrentSubscription?.RenewalDate) {
-              try {
-                const date = new Date(outsetaUser.Account.CurrentSubscription.RenewalDate);
-                renewalDate = date.toLocaleDateString('en-US', { 
-                  month: 'long', 
-                  day: 'numeric'
-                });
-              } catch (e) {
-                console.error('Error parsing renewal date:', e);
-              }
+        const outsetaUser = await window.Outseta.getUser();
+        
+        if (outsetaUser) {
+          let renewalDate = null;
+          if (outsetaUser?.Account?.CurrentSubscription?.RenewalDate) {
+            try {
+              const date = new Date(outsetaUser.Account.CurrentSubscription.RenewalDate);
+              renewalDate = date.toLocaleDateString('en-US', { 
+                month: 'long', 
+                day: 'numeric'
+              });
+            } catch (e) {
+              console.error('Error parsing renewal date:', e);
             }
-            
-            setUser({
-              email: outsetaUser.Email,
-              name: `${outsetaUser.FirstName} ${outsetaUser.LastName}`,
-              uid: outsetaUser.Uid,
-              planUid: outsetaUser?.Account?.CurrentSubscription?.Plan?.Uid,
-              renewalDate: renewalDate, // Added this!
-            });
-            setLoading(false);
-            clearTimeout(timeout);
           }
+          
+          setUser({
+            email: outsetaUser.Email,
+            name: `${outsetaUser.FirstName} ${outsetaUser.LastName}`,
+            uid: outsetaUser.Uid,
+            planUid: outsetaUser?.Account?.CurrentSubscription?.Plan?.Uid,
+            renewalDate: renewalDate,
+          });
         }
       } catch (error) {
         console.error('Error loading user:', error);
       } finally {
-        clearTimeout(timeout);
         setLoading(false);
       }
     };
 
     loadUser();
+
+    // Listen for Outseta auth changes
+    if (window.Outseta) {
+      window.Outseta.on('auth.login', loadUser);
+      window.Outseta.on('auth.logout', () => {
+        setUser(null);
+      });
+    }
+
+    return () => {
+      if (window.Outseta) {
+        window.Outseta.off('auth.login', loadUser);
+        window.Outseta.off('auth.logout', () => setUser(null));
+      }
+    };
   }, []);
 
   async function logout() {
     if (window.Outseta) {
       await window.Outseta.logout();
       setUser(null);
-      router.push('/');
+      window.location.href = '/';
     }
   }
 
