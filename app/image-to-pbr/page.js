@@ -1,6 +1,6 @@
 'use client';
-import { useState, useRef, Suspense, useCallback } from 'react';
-import { ArrowLeft, Sparkles, Download, X, Upload, Package, Check, Layers, Blend, Grid2x2, ScanLine, Crop } from 'lucide-react';
+import { useState, useRef, Suspense } from 'react';
+import { ArrowLeft, Sparkles, Download, X, Upload, Package, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 import JSZip from 'jszip';
@@ -24,35 +24,36 @@ function MaterialPreview({ textureUrl }) {
   );
 }
 
-// ─── Final canvas compositor (runs once on Generate) ─────────────────────────
-function compositeImage(imageSrc, settings) {
+// Final compositor — runs once on Generate
+function compositeToCanvas(imageSrc, settings) {
   return new Promise((resolve) => {
     const img = new window.Image();
     img.onload = () => {
-      const { tileCount, rotation, skewX, skewY, cropX, cropY, cropSize,
-              seamless, seamWidth, lightNorm, lightStrength, lightAngle, edgeBlend } = settings;
-
+      const { tileCount, tileRotation, tileSkewX, tileSkewY, edgeBlend, lightNorm, lightStrength, lightAngle, seamBlend } = settings;
       const tileSize = 1024;
-      const total = tileCount > 1 ? tileCount * tileSize : tileSize;
+      const cols = tileCount;
+      const rows = tileCount;
+      const total = cols * tileSize;
       const canvas = document.createElement('canvas');
       canvas.width = total;
       canvas.height = total;
       const ctx = canvas.getContext('2d');
 
-      // Seeded rand for reproducible rotation jitter
-      let seed = 1337;
+      let seed = 7;
       const rand = () => { seed = (seed * 1664525 + 1013904223) & 0xffffffff; return (seed >>> 0) / 0xffffffff; };
 
-      const draws = tileCount > 1 ? tileCount : 1;
-      for (let row = 0; row < draws; row++) {
-        for (let col = 0; col < draws; col++) {
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
           const cx = col * tileSize + tileSize / 2;
           const cy = row * tileSize + tileSize / 2;
           ctx.save();
           ctx.translate(cx, cy);
-          // Small per-tile rotation jitter
-          ctx.rotate((rand() * 2 - 1) * 8 * (Math.PI / 180));
-          const scale = tileSize * 1.06;
+          // Per-tile rotation jitter based on tileRotation setting
+          const rotRad = (tileRotation + (rand() * 2 - 1) * tileRotation * 0.5) * (Math.PI / 180);
+          ctx.rotate(rotRad);
+          // Per-tile skew
+          ctx.transform(1, tileSkewY / 100, tileSkewX / 100, 1, 0, 0);
+          const scale = tileSize * 1.08;
           ctx.drawImage(img, -scale / 2, -scale / 2, scale, scale);
           ctx.restore();
         }
@@ -66,31 +67,46 @@ function compositeImage(imageSrc, settings) {
         const x1 = total / 2 + dx * total * 0.7, y1 = total / 2 + dy * total * 0.7;
         const g = ctx.createLinearGradient(x0, y0, x1, y1);
         const s = lightStrength / 100;
-        g.addColorStop(0, `rgba(255,255,255,${s * 0.12})`);
+        g.addColorStop(0, `rgba(255,255,255,${s * 0.13})`);
         g.addColorStop(0.5, 'rgba(0,0,0,0)');
-        g.addColorStop(1, `rgba(0,0,0,${s * 0.14})`);
+        g.addColorStop(1, `rgba(0,0,0,${s * 0.15})`);
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, total, total);
       }
 
       // Edge blend between tiles
       if (tileCount > 1 && edgeBlend > 0) {
-        for (let row = 0; row < tileCount; row++) {
-          for (let col = 0; col < tileCount; col++) {
+        const bp = tileSize * edgeBlend;
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
             const x0 = col * tileSize, y0 = row * tileSize;
-            const bp = tileSize * edgeBlend * 0.5;
-            if (col < tileCount - 1) {
+            if (col < cols - 1) {
               const gR = ctx.createLinearGradient(x0 + tileSize - bp, 0, x0 + tileSize + bp, 0);
-              gR.addColorStop(0, 'rgba(0,0,0,0)'); gR.addColorStop(0.5, 'rgba(0,0,0,0.28)'); gR.addColorStop(1, 'rgba(0,0,0,0)');
-              ctx.fillStyle = gR; ctx.fillRect(x0 + tileSize - bp, y0, bp * 2, tileSize);
+              gR.addColorStop(0, 'rgba(0,0,0,0)');
+              gR.addColorStop(0.5, `rgba(0,0,0,${edgeBlend * 0.7})`);
+              gR.addColorStop(1, 'rgba(0,0,0,0)');
+              ctx.fillStyle = gR;
+              ctx.fillRect(x0 + tileSize - bp, y0, bp * 2, tileSize);
             }
-            if (row < tileCount - 1) {
+            if (row < rows - 1) {
               const gB = ctx.createLinearGradient(0, y0 + tileSize - bp, 0, y0 + tileSize + bp);
-              gB.addColorStop(0, 'rgba(0,0,0,0)'); gB.addColorStop(0.5, 'rgba(0,0,0,0.28)'); gB.addColorStop(1, 'rgba(0,0,0,0)');
-              ctx.fillStyle = gB; ctx.fillRect(x0, y0 + tileSize - bp, tileSize, bp * 2);
+              gB.addColorStop(0, 'rgba(0,0,0,0)');
+              gB.addColorStop(0.5, `rgba(0,0,0,${edgeBlend * 0.7})`);
+              gB.addColorStop(1, 'rgba(0,0,0,0)');
+              ctx.fillStyle = gB;
+              ctx.fillRect(x0, y0 + tileSize - bp, tileSize, bp * 2);
             }
           }
         }
+      }
+
+      // Seam blend — overlay alternating offset copy to dissolve seams
+      if (seamBlend > 0 && tileCount > 1) {
+        ctx.globalAlpha = seamBlend * 0.5;
+        // draw offset copy halfway
+        const half = tileSize / 2;
+        ctx.drawImage(canvas, half, half, total - half, total - half, 0, 0, total - half, total - half);
+        ctx.globalAlpha = 1;
       }
 
       resolve(canvas.toDataURL('image/png', 0.95));
@@ -99,7 +115,78 @@ function compositeImage(imageSrc, settings) {
   });
 }
 
-const TABS = ['Perspective', 'Seamless', 'Blend', 'Tiling'];
+const TABS = ['Grid', 'Angle', 'Light', 'Output'];
+
+// Smooth slider — works with both mouse and touch drag
+function Slider({ label, value, min, max, step = 1, unit = '', onChange, disabled = false }) {
+  const trackRef = useRef();
+
+  const getValueFromEvent = (clientX) => {
+    const rect = trackRef.current.getBoundingClientRect();
+    const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const raw = min + pct * (max - min);
+    const stepped = Math.round(raw / step) * step;
+    return Math.min(max, Math.max(min, parseFloat(stepped.toFixed(10))));
+  };
+
+  const handlePointerDown = (e) => {
+    if (disabled) return;
+    e.preventDefault();
+    trackRef.current.setPointerCapture(e.pointerId);
+    onChange(getValueFromEvent(e.clientX));
+  };
+
+  const handlePointerMove = (e) => {
+    if (disabled) return;
+    if (e.buttons === 0 && e.pressure === 0) return;
+    onChange(getValueFromEvent(e.clientX));
+  };
+
+  const pct = ((value - min) / (max - min)) * 100;
+
+  const displayVal = step < 1
+    ? (value * 100).toFixed(0) + (unit || '%')
+    : `${value}${unit}`;
+
+  return (
+    <div className={`mb-5 transition-opacity select-none ${disabled ? 'opacity-25 pointer-events-none' : 'opacity-100'}`}>
+      <div className="flex justify-between text-[11px] mb-2">
+        <span className="text-white/50 font-medium">{label}</span>
+        <span className="text-white font-bold">{displayVal}</span>
+      </div>
+      <div
+        ref={trackRef}
+        className="relative h-5 flex items-center cursor-pointer"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+      >
+        {/* Track */}
+        <div className="absolute w-full h-1.5 bg-white/10 rounded-full">
+          <div className="h-full bg-white rounded-full" style={{ width: `${pct}%` }} />
+        </div>
+        {/* Thumb */}
+        <div
+          className="absolute w-4 h-4 bg-white rounded-full shadow-lg border border-white/30"
+          style={{ left: `calc(${pct}% - 8px)` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Toggle({ label, sub, value, onChange }) {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <div>
+        <p className="text-sm font-bold text-white">{label}</p>
+        {sub && <p className="text-[10px] text-white/40 mt-0.5">{sub}</p>}
+      </div>
+      <button onClick={() => onChange(!value)} className={`w-12 h-6 rounded-full transition-all relative flex-shrink-0 ml-3 ${value ? 'bg-white' : 'bg-white/20'}`}>
+        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform ${value ? 'translate-x-6 bg-black' : 'bg-white/60'}`} />
+      </button>
+    </div>
+  );
+}
 
 export default function ImageToPBR() {
   const router = useRouter();
@@ -109,33 +196,25 @@ export default function ImageToPBR() {
   const [uploadedImage, setUploadedImage] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState('');
-  const [activeTab, setActiveTab] = useState('Tiling');
+  const [activeTab, setActiveTab] = useState('Grid');
   const [showPreview, setShowPreview] = useState(false);
 
-  // ── Perspective ──
-  const [rotation, setRotation] = useState(0);
-  const [skewX, setSkewX] = useState(0);
-  const [skewY, setSkewY] = useState(0);
+  // Grid / Tiling
+  const [tileCount, setTileCount] = useState(1);
+  const [edgeBlend, setEdgeBlend] = useState(0.05);
+  const [seamBlend, setSeamBlend] = useState(0);
 
-  // ── Seamless ──
-  const [seamless, setSeamless] = useState(false);
-  const [seamWidth, setSeamWidth] = useState(10);
+  // Angle — per-tile transforms
+  const [tileRotation, setTileRotation] = useState(0);
+  const [tileSkewX, setTileSkewX] = useState(0);
+  const [tileSkewY, setTileSkewY] = useState(0);
 
-  // ── Blend / Lighting ──
+  // Light
   const [lightNorm, setLightNorm] = useState(false);
-  const [lightStrength, setLightStrength] = useState(45);
+  const [lightStrength, setLightStrength] = useState(40);
   const [lightAngle, setLightAngle] = useState(45);
 
-  // ── Tiling ──
-  const [tileCount, setTileCount] = useState(1);
-  const [edgeBlend, setEdgeBlend] = useState(0.15);
-
-  // ── Crop ──
-  const [cropX, setCropX] = useState(0);
-  const [cropY, setCropY] = useState(0);
-  const [cropSize, setCropSize] = useState(100);
-
-  // ── PBR settings ──
+  // Output / PBR
   const [selectedMaps, setSelectedMaps] = useState({ normal: true, height: true, roughness: true, ao: true });
   const [resolution, setResolution] = useState('4K');
   const [pbSeamless, setPbSeamless] = useState(false);
@@ -167,32 +246,99 @@ export default function ImageToPBR() {
 
   const toggleMap = (k) => {
     const sel = Object.values(selectedMaps).filter(Boolean).length;
-    if (sel === 1 && selectedMaps[k]) { alert('Select at least one map!'); return; }
+    if (sel === 1 && selectedMaps[k]) { alert('Keep at least one map selected'); return; }
     setSelectedMaps(p => ({ ...p, [k]: !p[k] }));
   };
 
-  // CSS transform string — instant, no canvas needed for preview
-  const previewTransform = `rotate(${rotation}deg) skewX(${skewX}deg) skewY(${skewY}deg)`;
+  // ── Instant CSS tiling grid preview ──────────────────────────────────────
+  // Each tile gets its own CSS transform so per-tile angle/skew is visible immediately.
+  // Edge blend is shown via a box-shadow inset on each tile cell.
+  const renderTileGrid = () => {
+    if (!uploadedImage) return null;
+    const count = Math.max(1, tileCount);
+    const cellSize = Math.min(560 / count, 280);
+    const totalSize = cellSize * count;
 
-  // Tile repeat via CSS background for instant tiling preview
-  const tileStyle = tileCount > 1 ? {
-    backgroundImage: uploadedImage ? `url(${uploadedImage})` : 'none',
-    backgroundSize: `${100 / tileCount}% ${100 / tileCount}%`,
-    backgroundRepeat: 'repeat',
-    width: '600px',
-    height: '600px',
-    transform: previewTransform,
-    filter: lightNorm ? `contrast(${1 + lightStrength / 200})` : 'none',
-  } : null;
+    const tiles = [];
+    let seed = 7;
+    const rand = () => { seed = (seed * 1664525 + 1013904223) & 0xffffffff; return (seed >>> 0) / 0xffffffff; };
+
+    for (let r = 0; r < count; r++) {
+      for (let c = 0; c < count; c++) {
+        const rot = tileRotation + (rand() * 2 - 1) * tileRotation * 0.5;
+        const skX = tileSkewX;
+        const skY = tileSkewY;
+        // edge blend shown as an inset shadow on each tile
+        const blendPx = cellSize * edgeBlend * 2;
+        const seamShadow = seamBlend > 0
+          ? `inset 0 0 ${blendPx * 2}px rgba(0,0,0,${seamBlend * 0.6})`
+          : '';
+        const edgeShadow = edgeBlend > 0
+          ? `inset 0 0 ${blendPx}px rgba(0,0,0,${edgeBlend * 1.2})`
+          : '';
+        const shadow = [edgeShadow, seamShadow].filter(Boolean).join(', ');
+
+        tiles.push(
+          <div
+            key={`${r}-${c}`}
+            style={{
+              width: cellSize,
+              height: cellSize,
+              overflow: 'hidden',
+              position: 'relative',
+              flexShrink: 0,
+              boxShadow: shadow || undefined,
+            }}
+          >
+            <img
+              src={uploadedImage}
+              alt=""
+              style={{
+                width: '108%',
+                height: '108%',
+                position: 'absolute',
+                top: '-4%',
+                left: '-4%',
+                objectFit: 'cover',
+                transform: `rotate(${rot}deg) skewX(${skX}deg) skewY(${skY}deg)`,
+                filter: lightNorm
+                  ? `contrast(${1 + lightStrength / 180}) brightness(${1 - lightStrength / 350})`
+                  : 'none',
+                transition: 'transform 0.05s, filter 0.05s',
+              }}
+            />
+          </div>
+        );
+      }
+    }
+
+    return (
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${count}, ${cellSize}px)`,
+          gridTemplateRows: `repeat(${count}, ${cellSize}px)`,
+          width: totalSize,
+          height: totalSize,
+          gap: 0,
+          overflow: 'hidden',
+          borderRadius: 16,
+          boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
+        }}
+      >
+        {tiles}
+      </div>
+    );
+  };
 
   const handleGenerate = async () => {
     if (!uploadedImage || !user) { alert('Please upload an image and log in first'); return; }
-
     setIsGenerating(true);
 
-    // Run compositor once to get final image
-    const settings = { tileCount, rotation, skewX, skewY, cropX, cropY, cropSize, seamless, seamWidth, lightNorm, lightStrength, lightAngle, edgeBlend };
-    const composited = await compositeImage(uploadedImage, settings);
+    const composited = await compositeToCanvas(uploadedImage, {
+      tileCount, tileRotation, tileSkewX, tileSkewY, edgeBlend, seamBlend,
+      lightNorm, lightStrength, lightAngle,
+    });
     const generatedMaps = { original: composited };
 
     try {
@@ -263,31 +409,6 @@ export default function ImageToPBR() {
     } catch { alert('Error creating ZIP'); }
   };
 
-  const Slider = ({ label, value, min, max, step = 1, unit = '', onChange, disabled = false }) => (
-    <div className={`mb-4 transition-opacity ${disabled ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-      <div className="flex justify-between text-[11px] mb-1.5">
-        <span className="text-white/50 font-medium">{label}</span>
-        <span className="text-white font-bold">{typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(1) : value}{unit}</span>
-      </div>
-      <input type="range" min={min} max={max} step={step} value={value}
-        onChange={e => onChange(step < 1 ? parseFloat(e.target.value) : parseInt(e.target.value))}
-        className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
-      />
-    </div>
-  );
-
-  const Toggle = ({ label, sub, value, onChange }) => (
-    <div className="flex items-center justify-between mb-4">
-      <div>
-        <p className="text-sm font-bold text-white">{label}</p>
-        {sub && <p className="text-[10px] text-white/40 mt-0.5">{sub}</p>}
-      </div>
-      <button onClick={() => onChange(!value)} className={`w-12 h-6 rounded-full transition-all relative flex-shrink-0 ${value ? 'bg-white' : 'bg-white/20'}`}>
-        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform ${value ? 'translate-x-6 bg-black' : 'bg-white/60'}`} />
-      </button>
-    </div>
-  );
-
   return (
     <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-white font-sans overflow-hidden relative">
 
@@ -303,15 +424,15 @@ export default function ImageToPBR() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {resultMaps.original && (
                   <div className="relative bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <p className="text-xs text-white/60 mb-2 uppercase tracking-wider font-bold">Original</p>
+                    <p className="text-xs text-white/60 mb-2 uppercase tracking-wider font-bold">Composited</p>
                     <img src={resultMaps.original} alt="Original" className="w-full rounded-lg" />
                   </div>
                 )}
                 {[
-                  { key: 'normal', label: 'Normal Map', fn: 'pbr_normal.png' },
-                  { key: 'height', label: 'Height Map', fn: 'pbr_height.png' },
+                  { key: 'normal', label: 'Normal', fn: 'pbr_normal.png' },
+                  { key: 'height', label: 'Height', fn: 'pbr_height.png' },
                   { key: 'roughness', label: 'Roughness', fn: 'pbr_roughness.png' },
-                  { key: 'ao', label: 'AO Map', fn: 'pbr_ao.png' },
+                  { key: 'ao', label: 'Ambient Occlusion', fn: 'pbr_ao.png' },
                 ].map(({ key, label, fn }) => resultMaps[key] && (
                   <div key={key} className="relative bg-white/5 rounded-2xl p-4 border border-white/10">
                     <p className="text-xs text-white/60 mb-2 uppercase tracking-wider font-bold">{label}</p>
@@ -325,27 +446,15 @@ export default function ImageToPBR() {
             </div>
           </div>
         ) : uploadedImage ? (
-          <div className="w-full h-full flex items-center justify-center group overflow-hidden">
-            {tileCount > 1 ? (
-              /* Instant CSS tiling preview — zero delay */
-              <div style={tileStyle} className="rounded-xl shadow-2xl overflow-hidden" />
-            ) : (
-              <div className="relative">
-                <img
-                  src={uploadedImage}
-                  alt="Preview"
-                  className="max-w-2xl max-h-[72vh] rounded-2xl shadow-2xl object-cover transition-all duration-150"
-                  style={{
-                    transform: previewTransform,
-                    filter: lightNorm ? `contrast(${1 + lightStrength / 200}) brightness(${1 - lightStrength / 400})` : 'none',
-                    objectPosition: `${cropX}% ${cropY}%`,
-                  }}
-                />
+          <div className="w-full h-full flex items-center justify-center group">
+            <div className="relative" onClick={(e) => { if (e.target === e.currentTarget) handleRemoveImage(); }}>
+              {renderTileGrid()}
+              {tileCount <= 1 && (
                 <button onClick={handleRemoveImage} className="absolute top-3 right-3 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xl border border-white/10">
                   <X size={16} />
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -354,7 +463,7 @@ export default function ImageToPBR() {
                 <div className="w-20 h-20 sm:w-28 sm:h-28 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center mx-auto mb-5 transition-all border-2 border-dashed border-white/10 hover:border-white/20">
                   <Upload size={36} className="text-white/40 group-hover:text-white/60 transition-colors" />
                 </div>
-                <p className="text-lg sm:text-xl text-white/60 font-medium">Click to upload texture</p>
+                <p className="text-xl text-white/60 font-medium">Upload a texture</p>
                 <p className="text-xs text-white/30 mt-1.5">JPG, PNG, WEBP up to 10MB</p>
               </button>
               <input ref={fileInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileUpload} className="hidden" />
@@ -372,114 +481,90 @@ export default function ImageToPBR() {
 
       {/* SETTINGS PANEL */}
       {uploadedImage && !resultMaps.normal && (
-        <aside className="fixed top-4 sm:top-6 right-4 sm:right-6 z-50 w-72 sm:w-80 bg-[#111]/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <aside className="fixed top-4 sm:top-6 right-4 sm:right-6 z-50 w-72 sm:w-80 bg-[#0f0f0f]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
 
-          {/* Tab bar */}
-          <div className="grid grid-cols-2 gap-px bg-white/5 p-1 m-3 rounded-xl">
+          {/* Tabs */}
+          <div className="grid grid-cols-4 gap-0.5 bg-white/5 p-1 m-3 rounded-xl">
             {TABS.map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-1.5 text-[11px] font-bold rounded-lg transition-all ${activeTab === tab ? 'bg-white text-black' : 'text-white/40 hover:text-white/70'}`}
+                className={`py-1.5 text-[10px] font-bold rounded-lg transition-all ${activeTab === tab ? 'bg-white text-black' : 'text-white/40 hover:text-white/70'}`}
               >
                 {tab}
               </button>
             ))}
           </div>
 
-          <div className="overflow-y-auto flex-1 px-4 pb-4" style={{ scrollbarWidth: 'none' }}>
+          <div className="overflow-y-auto flex-1 px-4 pb-5" style={{ scrollbarWidth: 'none' }}>
 
-            {/* ── PERSPECTIVE ── */}
-            {activeTab === 'Perspective' && (
+            {/* GRID TAB */}
+            {activeTab === 'Grid' && (
               <div>
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 text-[11px] text-white/50 leading-relaxed">
-                  <span className="text-white font-bold">Perspective:</span> Adjust rotation and skew to fix images taken at an angle.
-                </div>
-                <Slider label="Rotation" value={rotation} min={-45} max={45} unit="°" onChange={setRotation} />
-                <Slider label="Horizontal Skew" value={skewX} min={-45} max={45} unit="°" onChange={setSkewX} />
-                <Slider label="Vertical Skew" value={skewY} min={-45} max={45} unit="°" onChange={setSkewY} />
-                <button
-                  onClick={() => { setRotation(0); setSkewX(0); setSkewY(0); }}
-                  className="w-full py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold transition-all border border-white/10 mb-4"
-                >
-                  Reset Alignment
-                </button>
-                <div className="border-t border-white/10 pt-4">
-                  <p className="text-xs text-white/40 uppercase tracking-wider font-bold mb-3">Crop</p>
-                  <Slider label="Position X" value={cropX} min={0} max={100} unit="%" onChange={setCropX} />
-                  <Slider label="Position Y" value={cropY} min={0} max={100} unit="%" onChange={setCropY} />
-                  <Slider label="Crop Size" value={cropSize} min={10} max={100} unit="%" onChange={setCropSize} />
-                </div>
+                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">
+                  Repeat your texture in a grid. Use edge and seam controls to hide where tiles meet.
+                </p>
+                <Slider label="Repeat Count" value={tileCount} min={1} max={6} unit={tileCount === 1 ? ' (off)' : `×${tileCount}`} onChange={setTileCount} />
+                <Slider label="Edge Softness" value={edgeBlend} min={0} max={0.4} step={0.01} unit="" onChange={setEdgeBlend} disabled={tileCount === 1} />
+                <Slider label="Seam Dissolve" value={seamBlend} min={0} max={1} step={0.01} unit="" onChange={setSeamBlend} disabled={tileCount === 1} />
               </div>
             )}
 
-            {/* ── SEAMLESS ── */}
-            {activeTab === 'Seamless' && (
+            {/* ANGLE TAB */}
+            {activeTab === 'Angle' && (
               <div>
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 text-[11px] text-white/50 leading-relaxed">
-                  <span className="text-white font-bold">Seamless Tiling:</span> Makes your texture tile perfectly without visible seams — essential for repeating patterns on large surfaces.
-                </div>
-                <Toggle label="Enable Seamless Tiling" value={seamless} onChange={setSeamless} />
-                <Slider label="Seam Width" value={seamWidth} min={1} max={50} unit="%" onChange={setSeamWidth} disabled={!seamless} />
-                <div className="border-t border-white/10 pt-4 mt-2">
-                  <p className="text-xs text-white/40 uppercase tracking-wider font-bold mb-3">Crop</p>
-                  <Slider label="Position X" value={cropX} min={0} max={100} unit="%" onChange={setCropX} />
-                  <Slider label="Position Y" value={cropY} min={0} max={100} unit="%" onChange={setCropY} />
-                  <Slider label="Crop Size" value={cropSize} min={10} max={100} unit="%" onChange={setCropSize} />
-                </div>
+                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">
+                  Each tile gets its own slight transform. Rotate or skew to break the repetition pattern and make the grid look natural.
+                </p>
+                <Slider label="Tile Rotation" value={tileRotation} min={0} max={45} unit="°" onChange={setTileRotation} disabled={tileCount === 1} />
+                <Slider label="Horizontal Shear" value={tileSkewX} min={-30} max={30} unit="°" onChange={setTileSkewX} disabled={tileCount === 1} />
+                <Slider label="Vertical Shear" value={tileSkewY} min={-30} max={30} unit="°" onChange={setTileSkewY} disabled={tileCount === 1} />
+                {tileCount === 1 && (
+                  <p className="text-[10px] text-white/30 mt-2 italic">Set Repeat Count above 1 to enable per-tile transforms.</p>
+                )}
               </div>
             )}
 
-            {/* ── BLEND ── */}
-            {activeTab === 'Blend' && (
+            {/* LIGHT TAB */}
+            {activeTab === 'Light' && (
               <div>
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 text-[11px] text-white/50 leading-relaxed">
-                  <span className="text-white font-bold">Lighting:</span> Removes gradients and shading to make texture uniform — flattens uneven illumination while preserving color and detail.
-                </div>
-                <Toggle label="Enable Lighting Normalization" sub="Flattens uneven illumination" value={lightNorm} onChange={setLightNorm} />
-                <Slider label="Normalization Strength" value={lightStrength} min={0} max={100} unit="%" onChange={setLightStrength} disabled={!lightNorm} />
+                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">
+                  Apply a smooth directional gradient across the whole sheet to simulate a single light source and remove uneven lighting from the source photo.
+                </p>
+                <Toggle label="Lighting Overlay" sub="Smooth directional shading" value={lightNorm} onChange={setLightNorm} />
+                <Slider label="Intensity" value={lightStrength} min={0} max={100} unit="%" onChange={setLightStrength} disabled={!lightNorm} />
                 <Slider label="Light Direction" value={lightAngle} min={0} max={360} unit="°" onChange={setLightAngle} disabled={!lightNorm} />
-                <div className="border-t border-white/10 pt-4 mt-2">
-                  <p className="text-xs text-white/40 uppercase tracking-wider font-bold mb-3">Crop</p>
-                  <Slider label="Position X" value={cropX} min={0} max={100} unit="%" onChange={setCropX} />
-                  <Slider label="Position Y" value={cropY} min={0} max={100} unit="%" onChange={setCropY} />
-                  <Slider label="Crop Size" value={cropSize} min={10} max={100} unit="%" onChange={setCropSize} />
-                </div>
               </div>
             )}
 
-            {/* ── TILING ── */}
-            {activeTab === 'Tiling' && (
+            {/* OUTPUT TAB */}
+            {activeTab === 'Output' && (
               <div>
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 text-[11px] text-white/50 leading-relaxed">
-                  <span className="text-white font-bold">Tiling:</span> Repeats your texture in a grid. Rotation randomness and edge blending hide the repeat pattern naturally.
+                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">
+                  Choose which PBR maps to generate and at what resolution.
+                </p>
+                <p className="text-[10px] text-white/40 uppercase tracking-wider font-bold mb-2">Maps</p>
+                <div className="space-y-2 mb-5">
+                  {Object.entries({ normal: 'Normal', height: 'Height', roughness: 'Roughness', ao: 'Ambient Occlusion' }).map(([key, label]) => (
+                    <button key={key} onClick={() => toggleMap(key)} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${selectedMaps[key] ? 'bg-white/10 border border-white/20' : 'bg-white/5 border border-white/5 opacity-40'}`}>
+                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${selectedMaps[key] ? 'border-white bg-white' : 'border-white/30'}`}>
+                        {selectedMaps[key] && <Check size={11} className="text-black" />}
+                      </div>
+                      <span className="text-sm font-medium">{label}</span>
+                    </button>
+                  ))}
                 </div>
-                <Slider label="Tile Count" value={tileCount} min={1} max={6} unit={tileCount === 1 ? ' (Off)' : `×${tileCount}`} onChange={setTileCount} />
-                <Slider label="Edge Blend" value={edgeBlend} min={0} max={0.4} step={0.01} unit="%" onChange={setEdgeBlend} disabled={tileCount === 1} />
-                <div className="border-t border-white/10 pt-4 mt-2">
-                  <p className="text-xs text-white/40 uppercase tracking-wider font-bold mb-3">PBR Maps</p>
-                  <div className="space-y-2 mb-4">
-                    {Object.entries({ normal: 'Normal Map', height: 'Height Map', roughness: 'Roughness', ao: 'AO Map' }).map(([key, label]) => (
-                      <button key={key} onClick={() => toggleMap(key)} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${selectedMaps[key] ? 'bg-white/10 border border-white/20' : 'bg-white/5 border border-white/5 opacity-50'}`}>
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${selectedMaps[key] ? 'border-white bg-white' : 'border-white/30'}`}>
-                          {selectedMaps[key] && <Check size={11} className="text-black" />}
-                        </div>
-                        <span className="text-sm font-medium">{label}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-white/40 uppercase tracking-wider font-bold mb-3">Resolution</p>
-                  <div className="grid grid-cols-4 gap-2 mb-4">
-                    {['1K', '2K', '4K', '8K'].map(res => (
-                      <button key={res} onClick={() => setResolution(res)} className={`py-2 text-xs font-bold rounded-lg transition-all ${resolution === res ? 'bg-white text-black' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}>
-                        {res}{res === '8K' && <span className="text-[8px] block opacity-60">+1cr</span>}
-                      </button>
-                    ))}
-                  </div>
-                  <Toggle label="Seamless Output" sub="+1 credit" value={pbSeamless} onChange={setPbSeamless} />
+                <p className="text-[10px] text-white/40 uppercase tracking-wider font-bold mb-2">Resolution</p>
+                <div className="grid grid-cols-4 gap-2 mb-5">
+                  {['1K', '2K', '4K', '8K'].map(res => (
+                    <button key={res} onClick={() => setResolution(res)} className={`py-2 text-xs font-bold rounded-lg transition-all ${resolution === res ? 'bg-white text-black' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}>
+                      {res}{res === '8K' && <span className="block text-[8px] opacity-50">+1cr</span>}
+                    </button>
+                  ))}
                 </div>
-                <div className="flex items-center justify-between pt-3 border-t border-white/10">
-                  <span className="text-sm font-bold text-white/60">Total Cost</span>
+                <Toggle label="Tileable Output" sub="Forces seamless edges (+1 credit)" value={pbSeamless} onChange={setPbSeamless} />
+                <div className="flex items-center justify-between pt-3 border-t border-white/10 mt-2">
+                  <span className="text-sm text-white/50 font-bold">Total</span>
                   <span className="text-2xl font-black">{calculateCredits()} Credits</span>
                 </div>
               </div>
@@ -504,20 +589,19 @@ export default function ImageToPBR() {
         <div className="bg-gradient-to-t from-black via-black/90 to-transparent pb-2">
           {resultMaps.normal ? (
             <div className="flex items-center justify-center gap-3">
-              <button onClick={() => setResultMaps({ normal: null, height: null, roughness: null, ao: null, original: null })} className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl sm:rounded-2xl transition-all backdrop-blur-xl border border-white/10 shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base">
+              <button onClick={() => setResultMaps({ normal: null, height: null, roughness: null, ao: null, original: null })} className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl sm:rounded-2xl transition-all backdrop-blur-xl border border-white/10 shadow-2xl flex items-center gap-2 font-bold">
                 <X size={18} /><span>Reset</span>
               </button>
-              <button onClick={handleDownloadAll} className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white hover:bg-gray-100 text-black rounded-xl sm:rounded-2xl transition-all shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base">
+              <button onClick={handleDownloadAll} className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white hover:bg-gray-100 text-black rounded-xl sm:rounded-2xl transition-all shadow-2xl flex items-center gap-2 font-bold">
                 <Package size={18} /><span>Download All (ZIP)</span>
               </button>
             </div>
           ) : (
-            <button onClick={handleGenerate} disabled={!uploadedImage || isGenerating || loading} className="w-full py-3 sm:py-3.5 bg-white hover:bg-gray-100 text-black font-bold text-sm sm:text-base rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 sm:gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl">
-              {isGenerating ? (
-                <><div className="h-4 w-4 border-2 border-black border-t-transparent animate-spin rounded-full" /><span>Generating PBR Maps...</span></>
-              ) : (
-                <><Sparkles size={18} /><span>Generate PBR Maps ({calculateCredits()} Credits)</span></>
-              )}
+            <button onClick={handleGenerate} disabled={!uploadedImage || isGenerating || loading} className="w-full py-3 sm:py-3.5 bg-white hover:bg-gray-100 text-black font-bold rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl">
+              {isGenerating
+                ? <><div className="h-4 w-4 border-2 border-black border-t-transparent animate-spin rounded-full" /><span>Generating PBR Maps...</span></>
+                : <><Sparkles size={18} /><span>Generate PBR Maps ({calculateCredits()} Credits)</span></>
+              }
             </button>
           )}
         </div>
