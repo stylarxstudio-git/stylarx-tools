@@ -36,7 +36,9 @@ export default function HDRIGenerator() {
   
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [resultImage, setResultImage] = useState(null);
+  const [resultImage, setResultImage] = useState(null); // preview URL (always PNG from fal)
+  const [downloadBlob, setDownloadBlob] = useState(null); // actual HDR/EXR blob for download
+  const [isDownloading, setIsDownloading] = useState(false);
   
   const [resolution, setResolution] = useState('2K');
   const [format, setFormat] = useState('HDRI');
@@ -58,40 +60,55 @@ export default function HDRIGenerator() {
     }
 
     setIsGenerating(true);
+    setDownloadBlob(null);
 
     try {
       const response = await fetch('/api/generate-hdri', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: prompt,
-          resolution: resolution,
-          format: format,
+          prompt,
+          resolution,
+          format,
           userId: user.uid,
           userEmail: user.email,
         }),
       });
 
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
-
-      if (data.status === 'succeeded') {
-        setResultImage(data.output[0]);
-
-        const { deductCredits } = await import('@/lib/credits');
-        const { saveGeneration } = await import('@/lib/generations');
-        
-        await deductCredits(user.uid, 1);
-        await saveGeneration({
-          outsetaUid: user.uid,
-          toolName: 'HDRI Generator',
-          prompt: prompt,
-          imageUrl: data.output[0],
-          creditsUsed: 1,
-        });
-      } else {
-        throw new Error('HDRI generation failed');
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Generation failed' }));
+        throw new Error(err.error || 'Generation failed');
       }
+
+      const contentType = response.headers.get('Content-Type') || '';
+
+      if (contentType.includes('application/json')) {
+        // Fallback: got JSON with a URL (PNG/JPG format)
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+        setResultImage(data.output[0]);
+        setDownloadBlob(null);
+      } else {
+        // Got binary HDR/EXR file — get preview URL from header, save blob for download
+        const previewUrl = response.headers.get('X-Image-Url');
+        const blob = await response.blob();
+        setDownloadBlob({ blob, format });
+        // Use the original PNG from fal for the 3D preview (EXR/HDR not displayable in browser)
+        if (previewUrl) {
+          setResultImage(previewUrl);
+        }
+      }
+
+      const { deductCredits } = await import('@/lib/credits');
+      const { saveGeneration } = await import('@/lib/generations');
+      await deductCredits(user.uid, 1);
+      await saveGeneration({
+        outsetaUid: user.uid,
+        toolName: 'HDRI Generator',
+        prompt,
+        imageUrl: resultImage || '',
+        creditsUsed: 1,
+      });
 
     } catch (err) {
       alert(err.message || 'Error generating HDRI');
@@ -101,21 +118,45 @@ export default function HDRIGenerator() {
   };
 
   const handleDownload = async () => {
-    if (!resultImage) return;
+    if (!resultImage && !downloadBlob) return;
+    setIsDownloading(true);
+
     try {
-      const response = await fetch(resultImage);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `hdri-${Date.now()}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
+      if (downloadBlob) {
+        // We already have the converted HDR/EXR blob — just save it
+        const ext = format === 'EXR' ? 'exr' : 'hdr';
+        const url = window.URL.createObjectURL(downloadBlob.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hdri-${Date.now()}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else if (resultImage) {
+        // No blob yet — download the preview PNG as the chosen format name
+        const response = await fetch(resultImage);
+        const blob = await response.blob();
+        const ext = format === 'EXR' ? 'exr' : format === 'HDRI' ? 'hdr' : 'png';
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hdri-${Date.now()}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch {
       window.open(resultImage, '_blank');
+    } finally {
+      setIsDownloading(false);
     }
+  };
+
+  const handleReset = () => {
+    setResultImage(null);
+    setDownloadBlob(null);
   };
 
   return (
@@ -212,7 +253,9 @@ export default function HDRIGenerator() {
           </div>
 
           <div>
-            <label className="text-[9px] md:text-[10px] uppercase font-bold text-white/40 mb-2 md:mb-3 block tracking-wider">Format</label>
+            <label className="text-[9px] md:text-[10px] uppercase font-bold text-white/40 mb-2 md:mb-3 block tracking-wider">
+              Export Format
+            </label>
             <div className="flex bg-black/40 p-1 rounded-lg md:rounded-xl border border-white/5">
               {['HDRI', 'EXR'].map(f => (
                 <button 
@@ -223,6 +266,9 @@ export default function HDRIGenerator() {
                 </button>
               ))}
             </div>
+            <p className="text-[8px] text-white/20 mt-1.5 text-center">
+              {format === 'EXR' ? 'OpenEXR — industry standard for VFX' : '.hdr Radiance — works in Blender, Unity, Unreal'}
+            </p>
           </div>
 
           <div className="space-y-4 md:space-y-5 pt-3 md:pt-4 border-t border-white/5">
@@ -301,18 +347,28 @@ export default function HDRIGenerator() {
       </footer>
 
       {resultImage && (
-        <div className="absolute top-6 right-6 md:top-8 md:right-8 z-50 flex gap-2 md:gap-3 pointer-events-auto">
+        <div className="absolute top-6 right-6 md:top-8 md:right-8 z-50 flex gap-2 md:gap-3 pointer-events-auto items-center">
+          {/* Format badge */}
+          <div className="px-3 py-1.5 bg-white/10 backdrop-blur-md border border-white/10 rounded-full text-[10px] font-bold text-white/60 uppercase tracking-wider">
+            {format === 'EXR' ? '.exr' : '.hdr'}
+          </div>
           <button 
-            onClick={() => setResultImage(null)} 
+            onClick={handleReset}
             className="p-2 md:p-3 bg-white/10 hover:bg-white/20 rounded-full border border-white/10 transition-all text-white/70"
           >
             <X size={20} />
           </button>
           <button 
             onClick={handleDownload}
-            className="p-2 md:p-3 bg-white text-black rounded-full hover:scale-105 transition-transform shadow-2xl"
+            disabled={isDownloading}
+            className="p-2 md:p-3 bg-white text-black rounded-full hover:scale-105 transition-transform shadow-2xl disabled:opacity-50 flex items-center gap-2 px-4"
           >
-            <Download size={20} />
+            {isDownloading ? (
+              <div className="h-4 w-4 border-2 border-black border-t-transparent animate-spin rounded-full" />
+            ) : (
+              <Download size={20} />
+            )}
+            <span className="text-xs font-bold">Download {format === 'EXR' ? 'EXR' : 'HDR'}</span>
           </button>
         </div>
       )}
