@@ -51,41 +51,77 @@ export default function SceneStager() {
     return null;
   };
 
+  // HELPER: Convert blob URL to base64 for photo mode
+  const blobToBase64 = async (blobUrl) => {
+    const response = await fetch(blobUrl);
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  // HELPER: Download result image
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(resultImage);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'staged-scene.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download error:', err);
+      window.open(resultImage, '_blank');
+    }
+  };
+
   // MAIN GENERATION ENGINE
   const handleGenerate = async () => {
-  if (!prompt || !file) return;
-  setIsGenerating(true);
+    if (!prompt || !file) return;
+    setIsGenerating(true);
 
-  try {
-    const inputImage = activeMode === '3d' ? captureCanvas() : file;
+    try {
+      let inputImage;
 
-    const response = await fetch('/api/generate-scene', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        image: inputImage,
-        prompt: prompt,
-        aspectRatio: aspectRatio,
-      }),
-    });
+      if (activeMode === '3d') {
+        inputImage = captureCanvas(); // already base64
+      } else {
+        inputImage = await blobToBase64(file); // convert blob to base64
+      }
 
-    const result = await response.json();
+      const response = await fetch('/api/generate-scene', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: inputImage,
+          prompt: prompt,
+          aspectRatio: aspectRatio,
+        }),
+      });
 
-    if (result.error) throw new Error(result.error);
+      const result = await response.json();
 
-    if (result.status === 'succeeded') {
-      setResultImage(result.output[0]);
-    } else {
-      throw new Error('AI generation failed. Please try a different prompt.');
+      if (result.error) throw new Error(result.error);
+
+      if (result.status === 'succeeded') {
+        setResultImage(result.output[0]);
+      } else {
+        throw new Error('AI generation failed. Please try a different prompt.');
+      }
+
+    } catch (err) {
+      console.error('Generation Error:', err);
+      alert(err.message || 'An error occurred during generation.');
+    } finally {
+      setIsGenerating(false);
     }
-
-  } catch (err) {
-    console.error('Generation Error:', err);
-    alert(err.message || 'An error occurred during generation.');
-  } finally {
-    setIsGenerating(false);
-  }
-};
+  };
 
   const getAspectClass = () => {
     if (aspectRatio === 'portrait') return 'max-w-[350px] aspect-[9/16]';
@@ -148,9 +184,9 @@ export default function SceneStager() {
                 <button onClick={() => setResultImage(null)} className="p-2 bg-black/60 hover:bg-black rounded-full border border-white/10 transition-all text-white">
                   <X size={20} />
                 </button>
-                <a href={resultImage} target="_blank" rel="noopener noreferrer" className="p-2 bg-white text-black rounded-full hover:scale-110 transition-transform flex items-center justify-center">
+                <button onClick={handleDownload} className="p-2 bg-white text-black rounded-full hover:scale-110 transition-transform flex items-center justify-center">
                   <Download size={20} />
-                </a>
+                </button>
               </div>
             )}
             
