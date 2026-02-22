@@ -73,7 +73,6 @@ export default function DecalGenerator() {
   const [generationProgress, setGenerationProgress] = useState('');
   const [resultImage, setResultImage] = useState(null);
   
-  // Settings
   const [decalType, setDecalType] = useState('Crack');
   const [style, setStyle] = useState('Realistic');
 
@@ -87,8 +86,7 @@ export default function DecalGenerator() {
     setGenerationProgress('Generating transparent decal...');
 
     try {
-      // Start generation
-      const startRes = await fetch('/api/generate-decal', {
+      const response = await fetch('/api/generate-decal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -100,44 +98,53 @@ export default function DecalGenerator() {
         }),
       });
 
-      let prediction = await startRes.json();
-      if (prediction.error) throw new Error(prediction.error);
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
 
-      // Poll for completion
-      while (prediction.status !== 'succeeded' && prediction.status !== 'failed') {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        const checkRes = await fetch('/api/generate-decal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ predictionId: prediction.predictionId }),
+      if (data.status === 'succeeded') {
+        setResultImage(data.output[0]);
+
+        const { deductCredits } = await import('@/lib/credits');
+        const { saveGeneration } = await import('@/lib/generations');
+        
+        await deductCredits(user.uid, 1);
+        await saveGeneration({
+          outsetaUid: user.uid,
+          toolName: 'Decal Generator',
+          prompt: prompt,
+          imageUrl: data.output[0],
+          creditsUsed: 1,
         });
-        prediction = await checkRes.json();
+
+        setGenerationProgress('');
+      } else {
+        throw new Error('Generation failed');
       }
-
-      if (prediction.status !== 'succeeded') throw new Error('Generation failed');
-
-      setResultImage(prediction.output[0]);
-
-      // Deduct credits and save generation
-      const { deductCredits } = await import('@/lib/credits');
-      const { saveGeneration } = await import('@/lib/generations');
-      
-      await deductCredits(user.uid, 1);
-      await saveGeneration({
-        outsetaUid: user.uid,
-        toolName: 'Decal Generator',
-        prompt: prompt,
-        imageUrl: prediction.output[0],
-        creditsUsed: 1,
-      });
-
-      setGenerationProgress('');
 
     } catch (err) {
       alert(err.message || 'Error generating decal');
       setGenerationProgress('');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!resultImage) return;
+    try {
+      const response = await fetch(resultImage);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `decal-${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.open(resultImage, '_blank');
     }
   };
 
@@ -155,13 +162,6 @@ export default function DecalGenerator() {
                 }}>
                   <img src={resultImage} alt="Generated Decal" className="w-full rounded-lg" />
                 </div>
-                <a 
-                  href={resultImage} 
-                  download="decal.png"
-                  className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 rounded-lg transition-all"
-                >
-                  <Download size={18} />
-                </a>
               </div>
             </div>
           </div>
@@ -201,28 +201,21 @@ export default function DecalGenerator() {
         <footer className="fixed bottom-0 left-0 w-full z-50 bg-gradient-to-t from-black via-black/95 to-transparent p-4 sm:p-6">
           <div className="max-w-4xl mx-auto space-y-4">
             
-            {/* Settings Row */}
             <div className="grid grid-cols-2 gap-3">
-              
-              {/* Decal Type */}
               <CustomDropdown
                 label="Decal Type"
                 value={decalType}
                 options={['Crack', 'Leak', 'Dirt', 'Rust', 'Moss', 'Blood', 'Oil', 'Graffiti', 'Bullet Hole', 'Scratch', 'Custom']}
                 onChange={setDecalType}
               />
-
-              {/* Style */}
               <CustomDropdown
                 label="Style"
                 value={style}
                 options={['Realistic', 'Stylized', 'Grunge', 'Clean']}
                 onChange={setStyle}
               />
-
             </div>
 
-            {/* Prompt Input & Generate */}
             <div className="flex gap-3">
               <input
                 type="text"
@@ -257,7 +250,7 @@ export default function DecalGenerator() {
         </footer>
       )}
 
-     {/* RESULT BUTTONS */}
+      {/* RESULT BUTTONS */}
       {resultImage && (
         <footer className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-3">
           <button 
@@ -268,14 +261,7 @@ export default function DecalGenerator() {
             <span>Reset</span>
           </button>
           <button
-            onClick={() => {
-              const link = document.createElement('a');
-              link.href = resultImage;
-              link.download = 'decal.png';
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-            }}
+            onClick={handleDownload}
             className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white hover:bg-gray-100 text-black rounded-xl sm:rounded-2xl transition-all shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
           >
             <Download size={18} className="sm:w-5 sm:h-5" />
