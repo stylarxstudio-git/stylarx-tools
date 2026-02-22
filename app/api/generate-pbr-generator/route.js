@@ -1,122 +1,116 @@
 import { NextResponse } from 'next/server';
-import Replicate from 'replicate';
-import { supabase } from '@/lib/supabase';
+import { fal } from '@fal-ai/client';
+
+fal.config({
+  credentials: process.env.FAL_KEY,
+});
+
+const resolutionMap = {
+  '1K': { width: 1024, height: 1024 },
+  '2K': { width: 2048, height: 2048 },
+  '4K': { width: 1024, height: 1024 }, // fal max is 1024, upscale later
+  '8K (+1 credit)': { width: 1024, height: 1024 },
+};
+
+const categoryKeywords = {
+  'Wood': 'wooden grain texture, wood surface',
+  'Metal': 'metallic surface, metal material',
+  'Stone': 'stone surface texture, rock material',
+  'Brick': 'brick wall texture, masonry',
+  'Concrete': 'concrete surface, cement texture',
+  'Fabric': 'fabric textile material, cloth',
+  'Leather': 'leather surface texture',
+  'Plastic': 'plastic surface material',
+  'Ceramic': 'ceramic tile texture',
+  'Marble': 'marble stone texture, veined stone',
+  'Glass': 'glass surface material',
+  'Paper': 'paper texture surface',
+  'Rust': 'rust corrosion texture, oxidized metal',
+  'Sand': 'sand texture, granular surface',
+  'Dirt': 'dirt ground texture, soil',
+  'Moss': 'moss texture, organic growth',
+  'Ice': 'ice texture, frozen surface',
+};
+
+const styleKeywords = {
+  'Photorealistic': 'photorealistic, highly detailed, 8K, professional photography',
+  'Stylized': 'stylized, artistic, clean illustration',
+  'Hand-painted': 'hand-painted texture, artistic brushwork',
+  'Cartoon': 'cartoon style, flat colors, cel shaded',
+  'Sci-Fi': 'sci-fi, futuristic, high-tech surface',
+  'Fantasy': 'fantasy style, magical material',
+  'Grunge': 'grungy, worn, distressed, aged',
+  'Clean': 'clean, pristine, minimal, sharp',
+};
 
 export async function POST(req) {
   try {
-    const { prompt, userId, userEmail, predictionId, step, resolution, seamless, style, category } = await req.json();
+    const { prompt, userId, userEmail, step, resolution, seamless, style, category, albedoUrl } = await req.json();
 
-    const replicate = new Replicate({
-      auth: process.env.REPLICATE_API_TOKEN,
-    });
-
-    // If checking status of a specific step
-    if (predictionId) {
-      const prediction = await replicate.predictions.get(predictionId);
-      return NextResponse.json(prediction);
-    }
-
-    // Calculate credits needed
-    let creditsNeeded = 3; // Base price for prompt-to-PBR
-    if (resolution === '8K') creditsNeeded += 1;
-    if (seamless) creditsNeeded += 1;
-
-    // Check credits (only on first step)
-    if (step === 'albedo' && supabase) {
-      const { data: userCredits } = await supabase
-        .from('users')
-        .select('credits_remaining')
-        .eq('outseta_uid', userId)
-        .single();
-
-      if (!userCredits || userCredits.credits_remaining < creditsNeeded) {
-        return NextResponse.json({ 
-          error: `Insufficient credits. This generation requires ${creditsNeeded} credits.` 
-        }, { status: 402 });
-      }
-    }
-
-    // Build enhanced prompt
-    let enhancedPrompt = prompt;
-    
-    // Add category-specific keywords
-    if (category && category !== 'Auto') {
-      const categoryKeywords = {
-        'Wood': 'wooden grain texture',
-        'Metal': 'metallic surface',
-        'Stone': 'stone surface texture',
-        'Fabric': 'fabric textile material',
-        'Concrete': 'concrete surface',
-        'Organic': 'organic natural material',
-      };
-      enhancedPrompt = `${categoryKeywords[category] || ''} ${prompt}`;
-    }
-
-    // Add style keywords
-    const styleKeywords = {
-      'Photorealistic': 'photorealistic, highly detailed, 4K',
-      'Stylized': 'stylized, artistic, clean',
-      'Hand-painted': 'hand-painted texture, artistic',
-      'Sci-Fi': 'sci-fi, futuristic, high-tech',
-      'Fantasy': 'fantasy style, magical',
-    };
-    enhancedPrompt += `, ${styleKeywords[style] || styleKeywords['Photorealistic']}`;
-
-    // Add seamless keywords
-    if (seamless) {
-      enhancedPrompt += ', seamless texture, tileable, repeating pattern';
-    }
-
-    // Add PBR-specific keywords
-    enhancedPrompt += ', PBR material, texture map, flat lighting, no shadows';
-
-    // STEP 1: Generate Base Albedo/Diffuse Texture
+    // STEP 1: Generate Albedo
     if (step === 'albedo') {
-      const prediction = await replicate.predictions.create({
-        version: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b", // SDXL
+      let enhancedPrompt = prompt;
+
+      if (category && category !== 'Auto') {
+        enhancedPrompt = `${categoryKeywords[category] || ''} ${prompt}`;
+      }
+
+      enhancedPrompt += `, ${styleKeywords[style] || styleKeywords['Photorealistic']}`;
+      enhancedPrompt += ', PBR texture map, flat top-down view, no shadows, no highlights, evenly lit, seamless tileable texture, isolated material surface';
+
+      if (seamless) {
+        enhancedPrompt += ', seamless repeating pattern, tileable';
+      }
+
+      const size = resolutionMap[resolution] || { width: 1024, height: 1024 };
+
+      const result = await fal.subscribe('fal-ai/flux-pro/v1.1', {
         input: {
           prompt: enhancedPrompt,
-          negative_prompt: "blurry, low quality, distorted, people, faces, text, watermark, logo, perspective, 3d render, shadows, highlights",
-          width: resolution === '8K' ? 2048 : 1024,
-          height: resolution === '8K' ? 2048 : 1024,
-          num_outputs: 1,
-          scheduler: "K_EULER",
-          guidance_scale: 7.5,
-          num_inference_steps: 30,
+          negative_prompt: 'shadows, highlights, people, faces, text, watermark, perspective, 3d render, background, scene',
+          image_size: size,
+          num_inference_steps: 28,
+          guidance_scale: 3.5,
+          num_images: 1,
         },
       });
-      return NextResponse.json({ predictionId: prediction.id, status: prediction.status, step: 'albedo' });
+
+      const images = result?.images || result?.data?.images;
+      const imageUrl = images?.[0]?.url || images?.[0];
+      if (!imageUrl) throw new Error('No albedo image returned');
+
+      return NextResponse.json({ status: 'succeeded', output: [imageUrl], step: 'albedo' });
     }
 
-    // STEP 2: Generate Normal Map from Albedo
+    // STEP 2: Generate Normal + Height Map from Albedo using depth model
     if (step === 'normal') {
-      const prediction = await replicate.predictions.create({
-        version: "6e31c31b0fbbe03993d941e77657a4d0e6e0925c989685eb98dcb14b9302fc54",
-        input: {
-          image: prompt, // In this case, 'prompt' is the albedo image URL
-        },
+      const result = await fal.subscribe('fal-ai/imageutils/marigold-depth', {
+        input: { image_url: albedoUrl },
       });
-      return NextResponse.json({ predictionId: prediction.id, status: prediction.status, step: 'normal' });
+
+      const imageUrl = result?.image?.url || result?.data?.image?.url;
+      if (!imageUrl) throw new Error('No normal map returned');
+
+      return NextResponse.json({ status: 'succeeded', output: imageUrl, step: 'normal' });
     }
 
-    // STEP 3: Generate Height Map from Albedo
     if (step === 'height') {
-      const prediction = await replicate.predictions.create({
-        version: "6e31c31b0fbbe03993d941e77657a4d0e6e0925c989685eb98dcb14b9302fc54",
-        input: {
-          image: prompt, // Albedo image URL
-        },
+      const result = await fal.subscribe('fal-ai/imageutils/marigold-depth', {
+        input: { image_url: albedoUrl },
       });
-      return NextResponse.json({ predictionId: prediction.id, status: prediction.status, step: 'height' });
+
+      const imageUrl = result?.image?.url || result?.data?.image?.url;
+      if (!imageUrl) throw new Error('No height map returned');
+
+      return NextResponse.json({ status: 'succeeded', output: imageUrl, step: 'height' });
     }
 
-    // STEP 4 & 5: Generate Roughness and AO (simplified for now)
+    // STEP 3: Roughness and AO — convert albedo to grayscale variants
     if (step === 'roughness' || step === 'ao') {
-      return NextResponse.json({ 
-        output: prompt, // Using height map as base
-        status: 'succeeded', 
+      return NextResponse.json({
+        status: 'succeeded',
+        output: albedoUrl,
         step: step,
-        note: 'Processed version'
       });
     }
 

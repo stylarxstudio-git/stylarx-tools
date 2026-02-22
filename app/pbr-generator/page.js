@@ -9,21 +9,14 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Sphere, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 
-// 3D Preview Component
 function MaterialPreview({ textureUrl }) {
   const texture = new THREE.TextureLoader().load(textureUrl);
-  
   return (
     <>
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} intensity={1} />
       <Sphere args={[2, 64, 64]}>
-        <meshStandardMaterial 
-          map={texture}
-          normalMap={texture}
-          roughness={0.7}
-          metalness={0.3}
-        />
+        <meshStandardMaterial map={texture} normalMap={texture} roughness={0.7} metalness={0.3} />
       </Sphere>
       <OrbitControls enableZoom={true} autoRotate autoRotateSpeed={2} />
       <Environment preset="sunset" />
@@ -31,7 +24,6 @@ function MaterialPreview({ textureUrl }) {
   );
 }
 
-// Custom Dropdown Component
 function CustomDropdown({ label, value, options, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -57,33 +49,18 @@ function CustomDropdown({ label, value, options, onChange }) {
         <span>{value}</span>
         <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
-      
       {isOpen && (
-        <div 
+        <div
           className="absolute bottom-full left-0 right-0 mb-1 bg-black/80 backdrop-blur-xl border border-white/20 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-50"
-          style={{
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-          }}
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          <style jsx>{`
-            div::-webkit-scrollbar {
-              display: none;
-            }
-          `}</style>
+          <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
           {options.map((option) => (
             <button
               key={option}
               type="button"
-              onClick={() => {
-                onChange(option);
-                setIsOpen(false);
-              }}
-              className={`w-full px-3 py-2 text-sm text-left transition-all ${
-                value === option 
-                  ? 'bg-white/20 text-white font-bold' 
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'
-              }`}
+              onClick={() => { onChange(option); setIsOpen(false); }}
+              className={`w-full px-3 py-2 text-sm text-left transition-all ${value === option ? 'bg-white/20 text-white font-bold' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
             >
               {option}
             </button>
@@ -97,13 +74,12 @@ function CustomDropdown({ label, value, options, onChange }) {
 export default function PBRGenerator() {
   const router = useRouter();
   const { user, loading } = useUser();
-  
+
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState('');
   const [showSeamlessInfo, setShowSeamlessInfo] = useState(false);
-  
-  // Settings
+
   const [resolution, setResolution] = useState('4K');
   const [seamless, setSeamless] = useState(true);
   const [style, setStyle] = useState('Photorealistic');
@@ -111,16 +87,11 @@ export default function PBRGenerator() {
   const [showPreview, setShowPreview] = useState(false);
 
   const [resultMaps, setResultMaps] = useState({
-    albedo: null,
-    normal: null,
-    height: null,
-    roughness: null,
-    ao: null,
+    albedo: null, normal: null, height: null, roughness: null, ao: null,
   });
 
-  // Calculate credits needed
   const calculateCredits = () => {
-    let credits = 3; // Base
+    let credits = 3;
     if (resolution === '8K (+1 credit)') credits += 1;
     if (seamless) credits += 1;
     return credits;
@@ -136,137 +107,72 @@ export default function PBRGenerator() {
     const generatedMaps = {};
 
     try {
-      // STEP 1: Generate Albedo/Base Texture
+      // STEP 1: Albedo
       setGenerationProgress('Generating base texture...');
-      const albedoStart = await fetch('/api/generate-pbr-generator', {
+      const albedoRes = await fetch('/api/generate-pbr-generator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: prompt,
-          userId: user.uid,
-          userEmail: user.email,
-          step: 'albedo',
-          resolution: resolution.replace(' (+1 credit)', ''),
-          seamless,
-          style,
-          category,
+          prompt, userId: user.uid, userEmail: user.email,
+          step: 'albedo', resolution, seamless, style, category,
         }),
       });
+      const albedoData = await albedoRes.json();
+      if (albedoData.error) throw new Error(albedoData.error);
+      generatedMaps.albedo = albedoData.output[0];
 
-      let albedoPrediction = await albedoStart.json();
-      if (albedoPrediction.error) throw new Error(albedoPrediction.error);
-
-      // Poll for albedo completion
-      while (albedoPrediction.status !== 'succeeded' && albedoPrediction.status !== 'failed') {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        const checkRes = await fetch('/api/generate-pbr-generator', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ predictionId: albedoPrediction.predictionId }),
-        });
-        albedoPrediction = await checkRes.json();
-      }
-
-      if (albedoPrediction.status !== 'succeeded') throw new Error('Base texture generation failed');
-      const albedoUrl = albedoPrediction.output[0];
-      generatedMaps.albedo = albedoUrl;
-
-      // STEP 2: Generate Normal Map
+      // STEP 2: Normal Map
       setGenerationProgress('Generating normal map...');
-      const normalStart = await fetch('/api/generate-pbr-generator', {
+      const normalRes = await fetch('/api/generate-pbr-generator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: albedoUrl,
-          step: 'normal',
-        }),
+        body: JSON.stringify({ step: 'normal', albedoUrl: generatedMaps.albedo }),
       });
+      const normalData = await normalRes.json();
+      if (normalData.status === 'succeeded') generatedMaps.normal = normalData.output;
 
-      let normalPrediction = await normalStart.json();
-      if (normalPrediction.error) throw new Error(normalPrediction.error);
-
-      while (normalPrediction.status !== 'succeeded' && normalPrediction.status !== 'failed') {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        const checkRes = await fetch('/api/generate-pbr-generator', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ predictionId: normalPrediction.predictionId }),
-        });
-        normalPrediction = await checkRes.json();
-      }
-
-      if (normalPrediction.status === 'succeeded') {
-        generatedMaps.normal = normalPrediction.output;
-      }
-
-      // STEP 3: Generate Height Map
+      // STEP 3: Height Map
       setGenerationProgress('Generating height map...');
-      const heightStart = await fetch('/api/generate-pbr-generator', {
+      const heightRes = await fetch('/api/generate-pbr-generator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: albedoUrl,
-          step: 'height',
-        }),
+        body: JSON.stringify({ step: 'height', albedoUrl: generatedMaps.albedo }),
       });
+      const heightData = await heightRes.json();
+      if (heightData.status === 'succeeded') generatedMaps.height = heightData.output;
 
-      let heightPrediction = await heightStart.json();
-      if (heightPrediction.error) throw new Error(heightPrediction.error);
-
-      while (heightPrediction.status !== 'succeeded' && heightPrediction.status !== 'failed') {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        const checkRes = await fetch('/api/generate-pbr-generator', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ predictionId: heightPrediction.predictionId }),
-        });
-        heightPrediction = await checkRes.json();
-      }
-
-      if (heightPrediction.status === 'succeeded') {
-        generatedMaps.height = heightPrediction.output;
-      }
-
-      // STEP 4: Generate Roughness
+      // STEP 4: Roughness
       setGenerationProgress('Generating roughness map...');
       const roughnessRes = await fetch('/api/generate-pbr-generator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: generatedMaps.height || albedoUrl,
-          step: 'roughness',
-        }),
+        body: JSON.stringify({ step: 'roughness', albedoUrl: generatedMaps.albedo }),
       });
       const roughnessData = await roughnessRes.json();
       if (roughnessData.output) generatedMaps.roughness = roughnessData.output;
 
-      // STEP 5: Generate AO
+      // STEP 5: AO
       setGenerationProgress('Generating AO map...');
       const aoRes = await fetch('/api/generate-pbr-generator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: generatedMaps.height || albedoUrl,
-          step: 'ao',
-        }),
+        body: JSON.stringify({ step: 'ao', albedoUrl: generatedMaps.albedo }),
       });
       const aoData = await aoRes.json();
       if (aoData.output) generatedMaps.ao = aoData.output;
 
       setResultMaps(generatedMaps);
 
-      // Deduct credits and save generation
       const { deductCredits } = await import('@/lib/credits');
       const { saveGeneration } = await import('@/lib/generations');
-      
       const creditsUsed = calculateCredits();
       await deductCredits(user.uid, creditsUsed);
       await saveGeneration({
         outsetaUid: user.uid,
         toolName: 'PBR Generator',
-        prompt: prompt,
+        prompt,
         imageUrl: generatedMaps.albedo,
-        creditsUsed: creditsUsed,
+        creditsUsed,
       });
 
       setGenerationProgress('');
@@ -281,26 +187,20 @@ export default function PBRGenerator() {
 
   const handleDownloadAll = async () => {
     const zip = new JSZip();
-    
     try {
       const fetchImage = async (url, filename) => {
         const response = await fetch(url);
         const blob = await response.blob();
         return { filename, blob };
       };
-
       const downloads = [];
       if (resultMaps.albedo) downloads.push(fetchImage(resultMaps.albedo, 'pbr_albedo.png'));
       if (resultMaps.normal) downloads.push(fetchImage(resultMaps.normal, 'pbr_normal.png'));
       if (resultMaps.height) downloads.push(fetchImage(resultMaps.height, 'pbr_height.png'));
       if (resultMaps.roughness) downloads.push(fetchImage(resultMaps.roughness, 'pbr_roughness.png'));
       if (resultMaps.ao) downloads.push(fetchImage(resultMaps.ao, 'pbr_ao.png'));
-
       const results = await Promise.all(downloads);
-      results.forEach(({ filename, blob }) => {
-        zip.file(filename, blob);
-      });
-
+      results.forEach(({ filename, blob }) => zip.file(filename, blob));
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, 'pbr_materials.zip');
     } catch (err) {
@@ -308,10 +208,26 @@ export default function PBRGenerator() {
     }
   };
 
+  const handleDownloadSingle = async (url, filename) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(a);
+    } catch (err) {
+      window.open(url, '_blank');
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-white font-sans overflow-hidden relative">
-      
-      {/* BACKGROUND */}
+
       <div className="fixed inset-0 z-0 bg-[#0a0a0a]">
         {resultMaps.albedo && showPreview ? (
           <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
@@ -323,77 +239,24 @@ export default function PBRGenerator() {
           <div className="w-full h-full flex items-center justify-center p-4 sm:p-8">
             <div className="max-w-7xl w-full">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                
-                {resultMaps.albedo && (
-                  <div className="relative bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <p className="text-xs text-white/60 mb-2 uppercase tracking-wider font-bold">Albedo</p>
-                    <img src={resultMaps.albedo} alt="Albedo" className="w-full rounded-lg" />
-                    <a 
-                      href={resultMaps.albedo} 
-                      download="albedo.png"
+                {[
+                  { key: 'albedo', label: 'Albedo', filename: 'pbr_albedo.png' },
+                  { key: 'normal', label: 'Normal', filename: 'pbr_normal.png' },
+                  { key: 'height', label: 'Height', filename: 'pbr_height.png' },
+                  { key: 'roughness', label: 'Roughness', filename: 'pbr_roughness.png' },
+                  { key: 'ao', label: 'AO', filename: 'pbr_ao.png' },
+                ].map(({ key, label, filename }) => resultMaps[key] && (
+                  <div key={key} className="relative bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <p className="text-xs text-white/60 mb-2 uppercase tracking-wider font-bold">{label}</p>
+                    <img src={resultMaps[key]} alt={label} className="w-full rounded-lg" />
+                    <button
+                      onClick={() => handleDownloadSingle(resultMaps[key], filename)}
                       className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all"
                     >
                       <Download size={14} />
-                    </a>
+                    </button>
                   </div>
-                )}
-
-                {resultMaps.normal && (
-                  <div className="relative bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <p className="text-xs text-white/60 mb-2 uppercase tracking-wider font-bold">Normal</p>
-                    <img src={resultMaps.normal} alt="Normal" className="w-full rounded-lg" />
-                    <a 
-                      href={resultMaps.normal} 
-                      download="normal.png"
-                      className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all"
-                    >
-                      <Download size={14} />
-                    </a>
-                  </div>
-                )}
-
-                {resultMaps.height && (
-                  <div className="relative bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <p className="text-xs text-white/60 mb-2 uppercase tracking-wider font-bold">Height</p>
-                    <img src={resultMaps.height} alt="Height" className="w-full rounded-lg" />
-                    <a 
-                      href={resultMaps.height} 
-                      download="height.png"
-                      className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all"
-                    >
-                      <Download size={14} />
-                    </a>
-                  </div>
-                )}
-
-                {resultMaps.roughness && (
-                  <div className="relative bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <p className="text-xs text-white/60 mb-2 uppercase tracking-wider font-bold">Roughness</p>
-                    <img src={resultMaps.roughness} alt="Roughness" className="w-full rounded-lg" />
-                    <a 
-                      href={resultMaps.roughness} 
-                      download="roughness.png"
-                      className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all"
-                    >
-                      <Download size={14} />
-                    </a>
-                  </div>
-                )}
-
-                {resultMaps.ao && (
-                  <div className="relative bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <p className="text-xs text-white/60 mb-2 uppercase tracking-wider font-bold">AO</p>
-                    <img src={resultMaps.ao} alt="AO" className="w-full rounded-lg" />
-                    <a 
-                      href={resultMaps.ao} 
-                      download="ao.png"
-                      className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all"
-                    >
-                      <Download size={14} />
-                    </a>
-                  </div>
-                )}
-
+                ))}
               </div>
             </div>
           </div>
@@ -410,9 +273,8 @@ export default function PBRGenerator() {
         )}
       </div>
 
-      {/* TOP LEFT - BACK BUTTON */}
       <nav className="p-4 sm:p-6 fixed top-0 left-0 w-full z-50 pointer-events-none">
-        <button 
+        <button
           onClick={() => router.push('/tools')}
           className="pointer-events-auto flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all backdrop-blur-md"
         >
@@ -421,7 +283,6 @@ export default function PBRGenerator() {
         </button>
       </nav>
 
-      {/* 3D PREVIEW TOGGLE */}
       {resultMaps.albedo && (
         <button
           onClick={() => setShowPreview(!showPreview)}
@@ -431,21 +292,17 @@ export default function PBRGenerator() {
         </button>
       )}
 
-      {/* GENERATION PROGRESS */}
       {isGenerating && generationProgress && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full shadow-2xl">
           <p className="text-sm font-medium">{generationProgress}</p>
         </div>
       )}
 
-      {/* SEAMLESS INFO MODAL */}
       {showSeamlessInfo && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowSeamlessInfo(false)}>
           <div className="bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl p-6 max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-3">What is Seamless/Tileable?</h3>
-            <p className="text-sm text-white/80 mb-4">
-              Seamless textures have edges that loop perfectly, allowing you to repeat them infinitely without visible seams or lines.
-            </p>
+            <p className="text-sm text-white/80 mb-4">Seamless textures have edges that loop perfectly, allowing you to repeat them infinitely without visible seams or lines.</p>
             <div className="text-sm text-white/70 space-y-2 mb-4">
               <p><strong>Essential for:</strong></p>
               <ul className="list-disc list-inside space-y-1 ml-2">
@@ -454,74 +311,50 @@ export default function PBRGenerator() {
                 <li>Professional rendering</li>
               </ul>
             </div>
-            <button 
-              onClick={() => setShowSeamlessInfo(false)}
-              className="w-full py-2 bg-white text-black font-bold rounded-lg hover:bg-gray-100 transition-all"
-            >
-              Got it!
-            </button>
+            <button onClick={() => setShowSeamlessInfo(false)} className="w-full py-2 bg-white text-black font-bold rounded-lg hover:bg-gray-100 transition-all">Got it!</button>
           </div>
         </div>
       )}
 
-      {/* BOTTOM PANEL - PROMPT & SETTINGS */}
       {!resultMaps.albedo && (
         <footer className="fixed bottom-0 left-0 w-full z-50 bg-gradient-to-t from-black via-black/95 to-transparent p-4 sm:p-6">
           <div className="max-w-5xl mx-auto space-y-4">
-            
-            {/* Settings Row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              
-              {/* Category - Custom Dropdown */}
               <CustomDropdown
                 label="Material Type"
                 value={category}
                 options={['Auto', 'Wood', 'Metal', 'Stone', 'Brick', 'Concrete', 'Fabric', 'Leather', 'Plastic', 'Ceramic', 'Marble', 'Glass', 'Paper', 'Rust', 'Sand', 'Dirt', 'Moss', 'Ice']}
                 onChange={setCategory}
               />
-
-              {/* Style - Custom Dropdown */}
               <CustomDropdown
                 label="Style"
                 value={style}
                 options={['Photorealistic', 'Stylized', 'Hand-painted', 'Cartoon', 'Sci-Fi', 'Fantasy', 'Grunge', 'Clean']}
                 onChange={setStyle}
               />
-
-              {/* Resolution - Custom Dropdown */}
               <CustomDropdown
                 label="Resolution"
                 value={resolution}
                 options={['1K', '2K', '4K', '8K (+1 credit)']}
                 onChange={setResolution}
               />
-
-              {/* Seamless */}
               <div className="flex flex-col justify-end">
                 <div className="flex items-center gap-1 mb-1">
                   <label className="text-[10px] text-white/40 uppercase tracking-wider">Tiling</label>
-                  <button 
-                    onClick={() => setShowSeamlessInfo(true)}
-                    className="p-0.5 hover:bg-white/10 rounded-full transition-all"
-                    type="button"
-                  >
+                  <button onClick={() => setShowSeamlessInfo(true)} className="p-0.5 hover:bg-white/10 rounded-full transition-all" type="button">
                     <Info size={10} className="text-white/40" />
                   </button>
                 </div>
                 <button
                   onClick={() => setSeamless(!seamless)}
                   type="button"
-                  className={`w-full py-2 rounded-lg text-sm font-bold transition-all ${
-                    seamless ? 'bg-white text-black' : 'bg-white/5 text-white/50 border border-white/10'
-                  }`}
+                  className={`w-full py-2 rounded-lg text-sm font-bold transition-all ${seamless ? 'bg-white text-black' : 'bg-white/5 text-white/50 border border-white/10'}`}
                 >
                   Seamless {seamless && '✓'}
                 </button>
               </div>
-
             </div>
 
-            {/* Prompt Input & Generate */}
             <div className="flex gap-3">
               <input
                 type="text"
@@ -551,26 +384,24 @@ export default function PBRGenerator() {
                 )}
               </button>
             </div>
-
           </div>
         </footer>
       )}
 
-      {/* RESULT BUTTONS */}
       {resultMaps.albedo && (
         <footer className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-3">
-          <button 
-            onClick={() => setResultMaps({ albedo: null, normal: null, height: null, roughness: null, ao: null })} 
+          <button
+            onClick={() => setResultMaps({ albedo: null, normal: null, height: null, roughness: null, ao: null })}
             className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl sm:rounded-2xl transition-all backdrop-blur-xl border border-white/10 shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
           >
-            <X size={18} className="sm:w-5 sm:h-5" />
+            <X size={18} />
             <span>Reset</span>
           </button>
           <button
             onClick={handleDownloadAll}
             className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white hover:bg-gray-100 text-black rounded-xl sm:rounded-2xl transition-all shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
           >
-            <Package size={18} className="sm:w-5 sm:h-5" />
+            <Package size={18} />
             <span>Download All (ZIP)</span>
           </button>
         </footer>
