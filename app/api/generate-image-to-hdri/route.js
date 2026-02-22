@@ -1,32 +1,44 @@
 import { NextResponse } from 'next/server';
-import Replicate from 'replicate';
+import { fal } from '@fal-ai/client';
+
+fal.config({
+  credentials: process.env.FAL_KEY,
+});
+
+async function toFalUrl(image) {
+  if (image.startsWith('http')) return image;
+  const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+  const buffer = Buffer.from(base64Data, 'base64');
+  const blob = new Blob([buffer], { type: 'image/png' });
+  const file = new File([blob], 'upload.png', { type: 'image/png' });
+  return await fal.storage.upload(file);
+}
 
 export async function POST(req) {
   try {
-    const { image, resolution, format, userId, userEmail, predictionId } = await req.json();
+    const { image, format, userId, userEmail } = await req.json();
 
-    const replicate = new Replicate({
-      auth: process.env.REPLICATE_API_TOKEN,
-    });
+    const imageUrl = await toFalUrl(image);
 
-    if (predictionId) {
-      const prediction = await replicate.predictions.get(predictionId);
-      return NextResponse.json(prediction);
-    }
-
-    const prediction = await replicate.predictions.create({
-      version: "7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
+    const result = await fal.subscribe('fal-ai/flux-pro/kontext', {
       input: {
-        image: image,
-        prompt: "360 degree equirectangular HDRI panorama, photorealistic environment lighting, high dynamic range, seamless wrap-around view",
-        prompt_strength: 0.7,
-        num_inference_steps: 50,
+        image_url: imageUrl,
+        prompt: '360 degree equirectangular panoramic HDRI environment map, photorealistic lighting, seamless spherical panorama, high dynamic range, smooth horizon, no visible seams, professional HDRI lighting environment',
         guidance_scale: 7.5,
-        refine: "expert_ensemble_refiner",
+        num_inference_steps: 50,
+        strength: 0.75,
       },
     });
 
-    return NextResponse.json(prediction);
+    const images = result?.images || result?.data?.images;
+    const imageOutputUrl = images?.[0]?.url || images?.[0];
+    if (!imageOutputUrl) throw new Error('No image returned from fal');
+
+    return NextResponse.json({
+      status: 'succeeded',
+      output: [imageOutputUrl],
+    });
+
   } catch (error) {
     console.error('Image to HDRI error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

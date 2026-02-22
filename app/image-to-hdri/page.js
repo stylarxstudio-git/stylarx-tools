@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 import * as THREE from 'three';
 
-// Preview Scene
 function HDRIPreview({ textureUrl }) {
   const isEXR = textureUrl.toLowerCase().endsWith('.exr');
   const texture = useLoader(isEXR ? EXRLoader : THREE.TextureLoader, textureUrl);
@@ -29,22 +28,19 @@ export default function ImageToHDRI() {
   const { user, loading } = useUser();
   const fileInputRef = useRef();
   const panelRef = useRef();
-  
+
   const [uploadedImage, setUploadedImage] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [resultHDRI, setResultHDRI] = useState(null);
-  
-  // Settings
+
   const [format, setFormat] = useState('EXR');
   const [autoRotate, setAutoRotate] = useState(true);
   const [rotateSpeed, setRotateSpeed] = useState(0.5);
 
-  // Draggable panel position
   const [panelPosition, setPanelPosition] = useState({ x: 0, y: 120 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
-  // Initialize panel position on mount
   useEffect(() => {
     setPanelPosition({ x: window.innerWidth - 320, y: 120 });
   }, []);
@@ -52,7 +48,6 @@ export default function ImageToHDRI() {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
     const reader = new FileReader();
     reader.onload = (event) => {
       setUploadedImage(event.target.result);
@@ -63,9 +58,7 @@ export default function ImageToHDRI() {
 
   const handleRemoveImage = () => {
     setUploadedImage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleGenerate = async () => {
@@ -76,7 +69,7 @@ export default function ImageToHDRI() {
 
     setIsGenerating(true);
     try {
-      const startRes = await fetch('/api/generate-image-to-hdri', {
+      const response = await fetch('/api/generate-image-to-hdri', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,34 +80,21 @@ export default function ImageToHDRI() {
         }),
       });
 
-      let prediction = await startRes.json();
-      if (prediction.error) throw new Error(prediction.error);
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
 
-      while (prediction.status !== 'succeeded' && prediction.status !== 'failed') {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (data.status === 'succeeded') {
+        setResultHDRI(data.output[0]);
 
-        const checkRes = await fetch('/api/generate-image-to-hdri', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ predictionId: prediction.predictionId }),
-        });
-
-        prediction = await checkRes.json();
-        if (prediction.error) throw new Error(prediction.error);
-      }
-
-      if (prediction.status === 'succeeded') {
-        setResultHDRI(prediction.output[0]);
-        
         const { deductCredits } = await import('@/lib/credits');
         const { saveGeneration } = await import('@/lib/generations');
-        
+
         await deductCredits(user.uid, 1);
         await saveGeneration({
           outsetaUid: user.uid,
           toolName: 'Image to HDRI',
           prompt: `Convert to ${format}`,
-          imageUrl: prediction.output[0],
+          imageUrl: data.output[0],
           creditsUsed: 1,
         });
       } else {
@@ -128,14 +108,28 @@ export default function ImageToHDRI() {
     }
   };
 
-  // Dragging handlers
+  const handleDownload = async () => {
+    if (!resultHDRI) return;
+    try {
+      const response = await fetch(resultHDRI);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `hdri-${Date.now()}.${format.toLowerCase()}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch {
+      window.open(resultHDRI, '_blank');
+    }
+  };
+
   const handleMouseDown = (e) => {
     if (e.target.closest('.drag-handle')) {
       setIsDragging(true);
-      setDragOffset({
-        x: e.clientX - panelPosition.x,
-        y: e.clientY - panelPosition.y
-      });
+      setDragOffset({ x: e.clientX - panelPosition.x, y: e.clientY - panelPosition.y });
     }
   };
 
@@ -143,10 +137,7 @@ export default function ImageToHDRI() {
     if (e.target.closest('.drag-handle')) {
       setIsDragging(true);
       const touch = e.touches[0];
-      setDragOffset({
-        x: touch.clientX - panelPosition.x,
-        y: touch.clientY - panelPosition.y
-      });
+      setDragOffset({ x: touch.clientX - panelPosition.x, y: touch.clientY - panelPosition.y });
     }
   };
 
@@ -154,7 +145,7 @@ export default function ImageToHDRI() {
     if (isDragging) {
       setPanelPosition({
         x: Math.max(0, Math.min(window.innerWidth - 280, e.clientX - dragOffset.x)),
-        y: Math.max(0, Math.min(window.innerHeight - 200, e.clientY - dragOffset.y))
+        y: Math.max(0, Math.min(window.innerHeight - 200, e.clientY - dragOffset.y)),
       });
     }
   };
@@ -164,21 +155,19 @@ export default function ImageToHDRI() {
       const touch = e.touches[0];
       setPanelPosition({
         x: Math.max(0, Math.min(window.innerWidth - 280, touch.clientX - dragOffset.x)),
-        y: Math.max(0, Math.min(window.innerHeight - 200, touch.clientY - dragOffset.y))
+        y: Math.max(0, Math.min(window.innerHeight - 200, touch.clientY - dragOffset.y)),
       });
     }
   };
 
   const handleMouseUp = () => setIsDragging(false);
 
-  // Add event listeners
   useEffect(() => {
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
       window.addEventListener('touchmove', handleTouchMove);
       window.addEventListener('touchend', handleMouseUp);
-      
       return () => {
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
@@ -190,26 +179,19 @@ export default function ImageToHDRI() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-white font-sans overflow-hidden relative">
-      
-      {/* FULLSCREEN 3D VIEWPORT */}
+
       <div className="fixed inset-0 z-0">
         {resultHDRI ? (
           <Canvas shadows camera={{ position: [0, 0, 10], fov: 50 }}>
             <Suspense fallback={null}>
               <HDRIPreview textureUrl={resultHDRI} />
             </Suspense>
-            <OrbitControls 
-              makeDefault 
-              enableZoom={true}
-              autoRotate={autoRotate}
-              autoRotateSpeed={rotateSpeed}
-            />
+            <OrbitControls makeDefault enableZoom={true} autoRotate={autoRotate} autoRotateSpeed={rotateSpeed} />
           </Canvas>
         ) : uploadedImage ? (
           <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a] group">
             <div className="relative">
               <img src={uploadedImage} alt="Preview" className="max-w-5xl max-h-[85vh] rounded-2xl shadow-2xl" />
-              {/* Premium X Button on hover */}
               <button
                 onClick={handleRemoveImage}
                 className="absolute top-3 right-3 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xl border border-white/10 shadow-lg"
@@ -221,31 +203,21 @@ export default function ImageToHDRI() {
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a]">
             <div className="text-center px-4">
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="group"
-              >
+              <button onClick={() => fileInputRef.current?.click()} className="group">
                 <div className="w-20 h-20 sm:w-28 sm:h-28 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center mx-auto mb-5 sm:mb-6 transition-all border-2 border-dashed border-white/10 hover:border-white/20">
                   <Upload size={32} className="sm:w-[44px] sm:h-[44px] text-white/40 group-hover:text-white/60 transition-colors" />
                 </div>
                 <p className="text-lg sm:text-xl text-white/60 font-medium">Click to upload image</p>
                 <p className="text-xs text-white/30 mt-1.5">PNG, JPG up to 10MB</p>
               </button>
-              <input 
-                ref={fileInputRef}
-                type="file" 
-                accept="image/*" 
-                onChange={handleFileUpload}
-                className="hidden"
-              />
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
             </div>
           </div>
         )}
       </div>
 
-      {/* TOP LEFT - BACK BUTTON */}
       <nav className="p-4 sm:p-6 fixed top-0 left-0 w-full z-50 pointer-events-none">
-        <button 
+        <button
           onClick={() => router.push('/tools')}
           className="pointer-events-auto flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all backdrop-blur-md"
         >
@@ -254,21 +226,16 @@ export default function ImageToHDRI() {
         </button>
       </nav>
 
-      {/* TOP RIGHT - FORMAT SELECTION */}
       <div className="fixed top-4 sm:top-6 right-4 sm:right-6 z-50">
         <div className="text-right mb-1.5">
           <span className="text-[9px] text-white/40 font-medium uppercase tracking-wider">Export Format</span>
         </div>
         <div className="flex items-center gap-1.5 bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-full px-1 py-1 shadow-2xl">
           {['HDRI', 'EXR'].map(f => (
-            <button 
-              key={f} 
+            <button
+              key={f}
               onClick={() => setFormat(f)}
-              className={`px-3 py-1 text-[10px] font-bold rounded-full transition-all ${
-                format === f 
-                  ? 'bg-white text-black' 
-                  : 'text-white/50 hover:text-white/80'
-              }`}
+              className={`px-3 py-1 text-[10px] font-bold rounded-full transition-all ${format === f ? 'bg-white text-black' : 'text-white/50 hover:text-white/80'}`}
             >
               {f}
             </button>
@@ -276,52 +243,35 @@ export default function ImageToHDRI() {
         </div>
       </div>
 
-      {/* DRAGGABLE ROTATION CONTROLS */}
-      <div 
+      <div
         ref={panelRef}
-        style={{ 
-          left: `${panelPosition.x}px`, 
-          top: `${panelPosition.y}px`,
-          position: 'fixed',
-          touchAction: 'none'
-        }}
+        style={{ left: `${panelPosition.x}px`, top: `${panelPosition.y}px`, position: 'fixed', touchAction: 'none' }}
         className="z-50 w-60 sm:w-64"
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
         <div className="bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl">
-          {/* Drag Handle */}
           <div className="drag-handle flex items-center justify-center py-1.5 border-b border-white/10 cursor-move">
             <GripVertical size={16} className="text-white/30" />
           </div>
-          
           <div className="p-4 space-y-3.5">
-            {/* Auto Rotate Toggle */}
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-white/70">Auto Rotate</span>
-              <button 
+              <button
                 onClick={() => setAutoRotate(!autoRotate)}
                 className={`w-10 h-5 rounded-full transition-all relative ${autoRotate ? 'bg-white' : 'bg-white/20'}`}
               >
-                <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform ${
-                  autoRotate ? 'translate-x-5 bg-black' : 'translate-x-0 bg-white/60'
-                }`} />
+                <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform ${autoRotate ? 'translate-x-5 bg-black' : 'translate-x-0 bg-white/60'}`} />
               </button>
             </div>
-
-            {/* Rotation Speed Slider */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-medium text-white/70">Rotation Speed</span>
                 <span className="font-bold text-white text-[11px]">{rotateSpeed.toFixed(1)}x</span>
               </div>
-              <input 
-                type="range" 
-                min="0.1" 
-                max="3" 
-                step="0.1" 
-                value={rotateSpeed} 
-                onChange={(e) => setRotateSpeed(parseFloat(e.target.value))}
+              <input
+                type="range" min="0.1" max="3" step="0.1"
+                value={rotateSpeed} onChange={(e) => setRotateSpeed(parseFloat(e.target.value))}
                 className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
               />
             </div>
@@ -329,31 +279,27 @@ export default function ImageToHDRI() {
         </div>
       </div>
 
-      {/* BOTTOM CENTER - GENERATE OR RESULT BUTTONS */}
       <footer className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-4xl px-4 sm:px-6">
         <div className="bg-gradient-to-t from-black via-black/90 to-transparent pb-2">
           {resultHDRI ? (
-            /* X & DOWNLOAD BUTTONS AFTER GENERATION */
             <div className="flex items-center justify-center gap-3">
-              <button 
-                onClick={() => setResultHDRI(null)} 
+              <button
+                onClick={() => setResultHDRI(null)}
                 className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl sm:rounded-2xl transition-all backdrop-blur-xl border border-white/10 shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
               >
-                <X size={18} className="sm:w-5 sm:h-5" />
+                <X size={18} />
                 <span>Reset</span>
               </button>
-              <a 
-                href={resultHDRI} 
-                download 
+              <button
+                onClick={handleDownload}
                 className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white hover:bg-gray-100 text-black rounded-xl sm:rounded-2xl transition-all shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
               >
-                <Download size={18} className="sm:w-5 sm:h-5" />
-                <span>Download</span>
-              </a>
+                <Download size={18} />
+                <span>Download {format}</span>
+              </button>
             </div>
           ) : (
-            /* GENERATE BUTTON BEFORE GENERATION */
-            <button 
+            <button
               onClick={handleGenerate}
               disabled={!uploadedImage || isGenerating || loading}
               className="w-full py-3 sm:py-3.5 bg-white hover:bg-gray-100 text-black font-bold text-sm sm:text-base rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 sm:gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white shadow-2xl"
@@ -365,7 +311,7 @@ export default function ImageToHDRI() {
                 </>
               ) : (
                 <>
-                  <Sparkles size={18} className="sm:w-5 sm:h-5" />
+                  <Sparkles size={18} />
                   <span>Convert to HDRI (1 Credit)</span>
                 </>
               )}
