@@ -1,74 +1,59 @@
 import { NextResponse } from 'next/server';
+import { fal } from "@fal-ai/client";
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { prompt, duration, format, quality, fps, loopable, userId, userEmail, predictionId } = body;
+    const { prompt, duration, format, seed, predictionId } = body;
 
-    // Check if API key exists
-    if (!process.env.MOTORICA_API_KEY || process.env.MOTORICA_API_KEY === 'your_motorica_api_key_here') {
+    // Use FAL_KEY from your .env.local
+    if (!process.env.FAL_KEY) {
       return NextResponse.json(
-        { error: 'Motorica API key not configured. Please add MOTORICA_API_KEY to your .env.local file.' },
+        { error: 'Fal API key not configured. Add FAL_KEY to .env.local' },
         { status: 500 }
       );
     }
 
-    // If checking existing prediction
+    // 1. Check Status if predictionId is provided
     if (predictionId) {
-      const checkResponse = await fetch(`https://api.motorica.ai/v1/animations/${predictionId}`, {
-        headers: {
-          'Authorization': `Bearer ${process.env.MOTORICA_API_KEY}`,
-        },
+      const status = await fal.queue.status("fal-ai/hunyuan-motion/fast", { 
+        requestId: predictionId 
       });
-
-      if (!checkResponse.ok) {
-        throw new Error('Failed to check animation status');
+      
+      // If finished, get the result
+      if (status.status === "COMPLETED") {
+        const result = await fal.queue.result("fal-ai/hunyuan-motion/fast", { 
+          requestId: predictionId 
+        });
+        return NextResponse.json({
+          status: 'completed',
+          animationUrl: result.fbx_file?.url, // Hunyuan Motion returns fbx_file object
+        });
       }
-
-      const prediction = await checkResponse.json();
-      return NextResponse.json(prediction);
+      
+      return NextResponse.json({ status: status.status.toLowerCase() });
     }
 
-    // Create new animation
-    const response = await fetch('https://api.motorica.ai/v1/animations', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.MOTORICA_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    // 2. Start new generation
+    // Hunyuan Motion specific parameters
+    const { request_id } = await fal.queue.submit("fal-ai/hunyuan-motion/fast", {
+      input: {
         prompt: prompt,
-        duration: duration,
-        format: format.toLowerCase(),
-        quality: quality,
-        fps: fps,
-        loopable: loopable,
-      }),
+        duration: duration || 5, // Default 5s
+        output_format: format.toLowerCase(), // 'fbx' or 'dict'
+        seed: seed || Math.floor(Math.random() * 1000000),
+      },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Motorica API Error:', errorText);
-      
-      if (response.status === 401) {
-        throw new Error('Invalid Motorica API key');
-      } else {
-        throw new Error(`Animation generation failed: ${response.statusText}`);
-      }
-    }
-
-    const data = await response.json();
-
     return NextResponse.json({
-      predictionId: data.id,
-      status: data.status,
-      animationUrl: data.output_url || null,
+      predictionId: request_id,
+      status: 'starting',
     });
 
   } catch (error) {
-    console.error('Animation API Error:', error);
+    console.error('Fal Animation Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to generate animation' },
+      { error: error.message || 'Failed to generate motion' },
       { status: 500 }
     );
   }

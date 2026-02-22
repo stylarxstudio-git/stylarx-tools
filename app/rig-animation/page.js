@@ -47,66 +47,57 @@ export default function RigAnimation() {
     }
   };
 
-  const handleGenerate = async () => {
-    if (!prompt.trim() || !user) {
-      alert('Please enter a description and log in first');
-      return;
-    }
+  // Inside your handleGenerate function in page.js:
 
-    setIsGenerating(true);
+const handleGenerate = async () => {
+  if (!prompt.trim() || !user) {
+    alert('Please enter a description');
+    return;
+  }
 
-    try {
-      const response = await fetch('/api/generate-rig-animation', {
+  setIsGenerating(true);
+
+  try {
+    const response = await fetch('/api/generate-rig-animation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        duration: duration === 'auto' ? 5 : parseInt(duration),
+        format: format, // 'FBX'
+      }),
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error);
+
+    let animationData = data;
+    // Polling loop
+    while (animationData.status !== 'completed' && animationData.status !== 'failed') {
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Poll every 3s
+      const checkResponse = await fetch('/api/generate-rig-animation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          duration: duration === 'auto' ? null : parseInt(duration),
-          format,
-          quality,
-          fps: parseInt(fps),
-          loopable,
-          userId: user.uid,
-          userEmail: user.email,
-        }),
+        body: JSON.stringify({ predictionId: animationData.predictionId }),
       });
-
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
-
-      let animationData = data;
-      while (animationData.status !== 'completed' && animationData.status !== 'succeeded' && animationData.status !== 'failed') {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const checkResponse = await fetch('/api/generate-rig-animation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ predictionId: animationData.predictionId }),
-        });
-        animationData = await checkResponse.json();
-      }
-
-      if (animationData.status === 'completed' || animationData.status === 'succeeded') {
-        const finalUrl = animationData.animationUrl || animationData.output;
-        setAnimationUrl(finalUrl);
-        const { deductCredits } = await import('@/lib/credits');
-        const { saveGeneration } = await import('@/lib/generations');
-        await deductCredits(user.uid, 2);
-        await saveGeneration({
-          outsetaUid: user.uid,
-          toolName: 'AI Rig Animation',
-          prompt,
-          imageUrl: finalUrl,
-          creditsUsed: 2,
-        });
-      } else {
-        throw new Error('Animation generation failed');
-      }
-    } catch (err) {
-      alert(err.message || 'Error generating animation');
-    } finally {
-      setIsGenerating(false);
+      animationData = await checkResponse.json();
     }
-  };
+
+    if (animationData.status === 'completed') {
+      setAnimationUrl(animationData.animationUrl);
+      
+      // Credits and saving logic...
+      const { deductCredits } = await import('@/lib/credits');
+      await deductCredits(user.uid, 2);
+    } else {
+      throw new Error('Animation generation failed');
+    }
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    setIsGenerating(false);
+  }
+};
 
   return (
     <div className="flex flex-col min-h-screen bg-[#1a1a1a] text-white font-sans overflow-hidden relative">
