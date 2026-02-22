@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, Suspense, useEffect } from 'react';
+import { useState, useRef, Suspense, useEffect, useCallback } from 'react';
 import { ArrowLeft, Sparkles, Download, X, Upload, Package, Check, Grid } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
@@ -24,19 +24,27 @@ function MaterialPreview({ textureUrl }) {
   );
 }
 
-// ─── Tiling compositor ────────────────────────────────────────────────────────
-// Takes the raw uploaded image and composites it into a seamless tiled sheet
-// entirely in the browser. Returns a base64 PNG ready to send to fal.
-function buildTiledCanvas(imageSrc, { tileCount, rotationJitter, brightnessJitter, edgeBlend }) {
+// ─── Canvas compositor ────────────────────────────────────────────────────────
+// lightAngle: 0-360 degrees — direction the "sun" comes from across the sheet
+// edgeBlend: 0-1 — how much to feather tile borders
+// rotationJitter: 0-45 degrees — per-tile rotation randomness
+function buildTiledCanvas(imageSrc, { tileCount, rotationJitter, lightAngle, edgeBlend }) {
   return new Promise((resolve) => {
     const img = new window.Image();
     img.onload = () => {
-      const tileSize = 1024; // each tile rendered at 1024px
+      const tileSize = 1024;
       const total = tileCount * tileSize;
       const canvas = document.createElement('canvas');
       canvas.width = total;
       canvas.height = total;
       const ctx = canvas.getContext('2d');
+
+      // Seeded pseudo-random so same settings = same result (no flickering)
+      let seed = 42;
+      const rand = () => {
+        seed = (seed * 1664525 + 1013904223) & 0xffffffff;
+        return (seed >>> 0) / 0xffffffff;
+      };
 
       for (let row = 0; row < tileCount; row++) {
         for (let col = 0; col < tileCount; col++) {
@@ -46,46 +54,70 @@ function buildTiledCanvas(imageSrc, { tileCount, rotationJitter, brightnessJitte
           ctx.save();
           ctx.translate(cx, cy);
 
-          // Rotation jitter — small random rotation per tile
-          const angle = (Math.random() * 2 - 1) * rotationJitter * (Math.PI / 180);
+          // Rotation jitter — deterministic per tile
+          const angle = (rand() * 2 - 1) * rotationJitter * (Math.PI / 180);
           ctx.rotate(angle);
 
-          // Scale slightly larger than tileSize to hide rotation edges
-          const scale = tileSize * 1.05;
+          const scale = tileSize * 1.06; // slightly oversized to hide rotation gaps
           ctx.drawImage(img, -scale / 2, -scale / 2, scale, scale);
-
-          // Brightness jitter — multiply layer
-          if (brightnessJitter > 0) {
-            const delta = (Math.random() * 2 - 1) * brightnessJitter;
-            ctx.globalCompositeOperation = delta > 0 ? 'screen' : 'multiply';
-            ctx.globalAlpha = Math.abs(delta) * 0.3;
-            ctx.fillStyle = delta > 0 ? '#ffffff' : '#000000';
-            ctx.fillRect(-scale / 2, -scale / 2, scale, scale);
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.globalAlpha = 1;
-          }
-
           ctx.restore();
+        }
+      }
 
-          // Edge blend — draw a feathered gradient over each tile border
-          if (edgeBlend > 0) {
-            const blendPx = tileSize * edgeBlend * 0.5;
+      // ── Even directional light pass ──────────────────────────────────────
+      // Instead of random per-tile brightness, paint ONE smooth gradient
+      // across the entire sheet at the chosen light angle. This simulates
+      // a single distant light source hitting the tiled surface evenly.
+      if (lightAngle !== null && lightAngle !== undefined) {
+        const rad = (lightAngle * Math.PI) / 180;
+        // gradient goes from the "lit" side to the "shadow" side
+        const dx = Math.cos(rad);
+        const dy = Math.sin(rad);
+        const x0 = total / 2 - dx * total * 0.7;
+        const y0 = total / 2 - dy * total * 0.7;
+        const x1 = total / 2 + dx * total * 0.7;
+        const y1 = total / 2 + dy * total * 0.7;
+
+        const lightGrad = ctx.createLinearGradient(x0, y0, x1, y1);
+        lightGrad.addColorStop(0, 'rgba(255,255,255,0.10)'); // lit side — slight brighten
+        lightGrad.addColorStop(0.5, 'rgba(0,0,0,0)');        // midpoint — neutral
+        lightGrad.addColorStop(1, 'rgba(0,0,0,0.12)');       // shadow side — slight darken
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = lightGrad;
+        ctx.fillRect(0, 0, total, total);
+      }
+
+      // ── Edge blend pass ──────────────────────────────────────────────────
+      // Feather each tile border with a soft gradient to hide seam lines
+      if (edgeBlend > 0) {
+        ctx.globalCompositeOperation = 'source-over';
+        for (let row = 0; row < tileCount; row++) {
+          for (let col = 0; col < tileCount; col++) {
             const x0 = col * tileSize;
             const y0 = row * tileSize;
+            const blendPx = tileSize * edgeBlend * 0.5;
 
-            // Right edge
-            const gR = ctx.createLinearGradient(x0 + tileSize - blendPx, 0, x0 + tileSize, 0);
-            gR.addColorStop(0, 'rgba(0,0,0,0)');
-            gR.addColorStop(1, 'rgba(0,0,0,0.45)');
-            ctx.fillStyle = gR;
-            ctx.fillRect(x0 + tileSize - blendPx, y0, blendPx, tileSize);
+            // right seam
+            if (col < tileCount - 1) {
+              const gR = ctx.createLinearGradient(x0 + tileSize - blendPx, 0, x0 + tileSize + blendPx, 0);
+              gR.addColorStop(0, 'rgba(0,0,0,0)');
+              gR.addColorStop(0.5, 'rgba(0,0,0,0.3)');
+              gR.addColorStop(1, 'rgba(0,0,0,0)');
+              ctx.fillStyle = gR;
+              ctx.fillRect(x0 + tileSize - blendPx, y0, blendPx * 2, tileSize);
+            }
 
-            // Bottom edge
-            const gB = ctx.createLinearGradient(0, y0 + tileSize - blendPx, 0, y0 + tileSize);
-            gB.addColorStop(0, 'rgba(0,0,0,0)');
-            gB.addColorStop(1, 'rgba(0,0,0,0.45)');
-            ctx.fillStyle = gB;
-            ctx.fillRect(x0, y0 + tileSize - blendPx, tileSize, blendPx);
+            // bottom seam
+            if (row < tileCount - 1) {
+              const gB = ctx.createLinearGradient(0, y0 + tileSize - blendPx, 0, y0 + tileSize + blendPx);
+              gB.addColorStop(0, 'rgba(0,0,0,0)');
+              gB.addColorStop(0.5, 'rgba(0,0,0,0.3)');
+              gB.addColorStop(1, 'rgba(0,0,0,0)');
+              ctx.fillStyle = gB;
+              ctx.fillRect(x0, y0 + tileSize - blendPx, tileSize, blendPx * 2);
+            }
           }
         }
       }
@@ -100,40 +132,50 @@ export default function ImageToPBR() {
   const router = useRouter();
   const { user, loading } = useUser();
   const fileInputRef = useRef();
+  const debounceRef = useRef(null);
 
   const [uploadedImage, setUploadedImage] = useState(null);
-  const [tiledPreview, setTiledPreview] = useState(null); // composited preview shown to user
+  const [tiledPreview, setTiledPreview] = useState(null);
   const [isCompositing, setIsCompositing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState('');
 
   // Tiling settings
-  const [tileCount, setTileCount] = useState(2);       // 1=off, 2=2x2, 3=3x3, 4=4x4
-  const [rotationJitter, setRotationJitter] = useState(5);   // degrees
-  const [brightnessJitter, setBrightnessJitter] = useState(0.3); // 0–1
-  const [edgeBlend, setEdgeBlend] = useState(0.15);    // 0–0.5
+  const [tileCount, setTileCount] = useState(1);
+  const [rotationJitter, setRotationJitter] = useState(5);
+  const [lightAngle, setLightAngle] = useState(45);
+  const [edgeBlend, setEdgeBlend] = useState(0.15);
 
   const [selectedMaps, setSelectedMaps] = useState({
     normal: true, height: true, roughness: true, ao: true,
   });
-
   const [resolution, setResolution] = useState('4K');
   const [seamless, setSeamless] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-
   const [resultMaps, setResultMaps] = useState({
     normal: null, height: null, roughness: null, ao: null, original: null,
   });
 
-  // Rebuild tiled preview whenever image or tiling settings change
+  // Debounced compositor — only fires 300ms after the user stops moving a slider
+  const scheduleComposite = useCallback((image, settings) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setIsCompositing(true);
+    debounceRef.current = setTimeout(async () => {
+      if (settings.tileCount <= 1) {
+        setTiledPreview(image);
+        setIsCompositing(false);
+        return;
+      }
+      const result = await buildTiledCanvas(image, settings);
+      setTiledPreview(result);
+      setIsCompositing(false);
+    }, 300);
+  }, []);
+
   useEffect(() => {
     if (!uploadedImage) { setTiledPreview(null); return; }
-    if (tileCount === 1) { setTiledPreview(uploadedImage); return; }
-
-    setIsCompositing(true);
-    buildTiledCanvas(uploadedImage, { tileCount, rotationJitter, brightnessJitter, edgeBlend })
-      .then((result) => { setTiledPreview(result); setIsCompositing(false); });
-  }, [uploadedImage, tileCount, rotationJitter, brightnessJitter, edgeBlend]);
+    scheduleComposite(uploadedImage, { tileCount, rotationJitter, lightAngle, edgeBlend });
+  }, [uploadedImage, tileCount, rotationJitter, lightAngle, edgeBlend]);
 
   const calculateCredits = () => {
     let credits = 2;
@@ -173,8 +215,6 @@ export default function ImageToPBR() {
       alert('Please upload an image and log in first');
       return;
     }
-
-    // Send the tiled/composited image, not the raw upload
     const imageToSend = tiledPreview || uploadedImage;
     setIsGenerating(true);
     const generatedMaps = { original: imageToSend };
@@ -235,11 +275,10 @@ export default function ImageToPBR() {
       await saveGeneration({
         outsetaUid: user.uid,
         toolName: 'Image to PBR',
-        prompt: `Generate PBR maps (${resolution}${seamless ? ', Seamless' : ''}${tileCount > 1 ? `, ${tileCount}x${tileCount} Tiled` : ''})`,
+        prompt: `PBR maps (${resolution}${seamless ? ', Seamless' : ''}${tileCount > 1 ? `, ${tileCount}×${tileCount} Tiled` : ''})`,
         imageUrl: generatedMaps.normal || generatedMaps.height || imageToSend,
         creditsUsed,
       });
-
       setGenerationProgress('');
     } catch (err) {
       alert(err.message || 'Error generating PBR maps');
@@ -285,10 +324,11 @@ export default function ImageToPBR() {
     } catch { alert('Error creating ZIP file'); }
   };
 
+  const tilingEnabled = tileCount > 1;
+
   return (
     <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-white font-sans overflow-hidden relative">
 
-      {/* BACKGROUND / MAIN VIEW */}
       <div className="fixed inset-0 z-0 bg-[#0a0a0a]">
         {resultMaps.normal && showPreview ? (
           <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
@@ -327,18 +367,23 @@ export default function ImageToPBR() {
             </div>
           </div>
         ) : uploadedImage ? (
-          /* Show tiled preview while settings panel is visible */
           <div className="w-full h-full flex items-center justify-center group">
             <div className="relative">
               {isCompositing ? (
-                <div className="w-64 h-64 flex items-center justify-center">
-                  <div className="h-8 w-8 border-2 border-white/40 border-t-white animate-spin rounded-full" />
+                <div className="flex flex-col items-center gap-3">
+                  {/* Show previous preview faded while recomputing */}
+                  {tiledPreview && (
+                    <img src={tiledPreview} alt="Preview" className="max-w-2xl max-h-[70vh] rounded-2xl shadow-2xl object-cover opacity-40 transition-opacity" />
+                  )}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="h-7 w-7 border-2 border-white/40 border-t-white animate-spin rounded-full" />
+                  </div>
                 </div>
               ) : (
                 <img
                   src={tiledPreview || uploadedImage}
                   alt="Tiled Preview"
-                  className="max-w-2xl max-h-[70vh] rounded-2xl shadow-2xl object-cover"
+                  className="max-w-2xl max-h-[70vh] rounded-2xl shadow-2xl object-cover transition-opacity duration-300"
                 />
               )}
               <button
@@ -365,97 +410,89 @@ export default function ImageToPBR() {
         )}
       </div>
 
-      {/* BACK BUTTON */}
       <nav className="p-4 sm:p-6 fixed top-0 left-0 w-full z-50 pointer-events-none">
-        <button
-          onClick={() => router.push('/tools')}
-          className="pointer-events-auto flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all backdrop-blur-md"
-        >
+        <button onClick={() => router.push('/tools')} className="pointer-events-auto flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all backdrop-blur-md">
           <ArrowLeft size={18} />
           <span className="text-sm font-medium">Back to Tools</span>
         </button>
       </nav>
 
-      {/* SETTINGS PANEL — shown when image uploaded, before generation */}
+      {/* SETTINGS PANEL */}
       {uploadedImage && !resultMaps.normal && (
-        <aside className="fixed top-4 sm:top-6 right-4 sm:right-6 z-50 w-72 sm:w-80 bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 sm:p-5 space-y-5 max-h-[90vh] overflow-y-auto"
+        <aside
+          className="fixed top-4 sm:top-6 right-4 sm:right-6 z-50 w-72 sm:w-80 bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 sm:p-5 space-y-5 max-h-[90vh] overflow-y-auto"
           style={{ scrollbarWidth: 'none' }}
         >
 
           {/* ── TILING ── */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-4">
               <Grid size={13} className="text-white/50" />
               <p className="text-xs text-white/60 uppercase tracking-wider font-bold">Tiling</p>
             </div>
 
-            {/* Tile count */}
-            <div className="mb-3">
-              <div className="flex justify-between text-[10px] text-white/40 mb-1.5">
-                <span>Tile Grid</span>
-                <span>{tileCount === 1 ? 'Off' : `${tileCount}×${tileCount}`}</span>
+            {/* Tile count — slider */}
+            <div className="mb-4">
+              <div className="flex justify-between text-[10px] text-white/40 mb-2">
+                <span>Tile Count</span>
+                <span className="text-white font-bold">{tileCount === 1 ? 'Off' : `${tileCount}×${tileCount}`}</span>
               </div>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[1, 2, 3, 4].map(n => (
-                  <button
-                    key={n}
-                    onClick={() => setTileCount(n)}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all ${tileCount === n ? 'bg-white text-black' : 'bg-white/5 text-white/50 hover:bg-white/10 border border-white/10'}`}
-                  >
-                    {n === 1 ? 'Off' : `${n}×${n}`}
-                  </button>
-                ))}
+              <input
+                type="range" min="1" max="6" step="1"
+                value={tileCount}
+                onChange={e => setTileCount(Number(e.target.value))}
+                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
+              />
+              <div className="flex justify-between text-[9px] text-white/20 mt-1">
+                <span>Off</span><span>2×2</span><span>3×3</span><span>4×4</span><span>5×5</span><span>6×6</span>
               </div>
             </div>
 
             {/* Rotation jitter */}
-            <div className="mb-3">
-              <div className="flex justify-between text-[10px] text-white/40 mb-1.5">
+            <div className={`mb-4 transition-opacity ${tilingEnabled ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
+              <div className="flex justify-between text-[10px] text-white/40 mb-2">
                 <span>Rotation Randomness</span>
-                <span>{rotationJitter}°</span>
+                <span className="text-white font-bold">{rotationJitter}°</span>
               </div>
               <input
                 type="range" min="0" max="45" step="1"
                 value={rotationJitter}
                 onChange={e => setRotationJitter(Number(e.target.value))}
-                disabled={tileCount === 1}
-                className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white disabled:opacity-30"
+                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
               />
               <div className="flex justify-between text-[9px] text-white/20 mt-1">
                 <span>None</span><span>Subtle</span><span>Strong</span>
               </div>
             </div>
 
-            {/* Brightness jitter */}
-            <div className="mb-3">
-              <div className="flex justify-between text-[10px] text-white/40 mb-1.5">
-                <span>Brightness Variation</span>
-                <span>{Math.round(brightnessJitter * 100)}%</span>
+            {/* Light angle — even directional shading across whole sheet */}
+            <div className={`mb-4 transition-opacity ${tilingEnabled ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
+              <div className="flex justify-between text-[10px] text-white/40 mb-2">
+                <span>Light Direction</span>
+                <span className="text-white font-bold">{lightAngle}°</span>
               </div>
               <input
-                type="range" min="0" max="1" step="0.05"
-                value={brightnessJitter}
-                onChange={e => setBrightnessJitter(Number(e.target.value))}
-                disabled={tileCount === 1}
-                className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white disabled:opacity-30"
+                type="range" min="0" max="360" step="1"
+                value={lightAngle}
+                onChange={e => setLightAngle(Number(e.target.value))}
+                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
               />
               <div className="flex justify-between text-[9px] text-white/20 mt-1">
-                <span>None</span><span>Medium</span><span>High</span>
+                <span>← Left</span><span>Top</span><span>Right →</span>
               </div>
             </div>
 
             {/* Edge blend */}
-            <div>
-              <div className="flex justify-between text-[10px] text-white/40 mb-1.5">
+            <div className={`transition-opacity ${tilingEnabled ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
+              <div className="flex justify-between text-[10px] text-white/40 mb-2">
                 <span>Edge Blend</span>
-                <span>{Math.round(edgeBlend * 100)}%</span>
+                <span className="text-white font-bold">{Math.round(edgeBlend * 100)}%</span>
               </div>
               <input
                 type="range" min="0" max="0.4" step="0.01"
                 value={edgeBlend}
                 onChange={e => setEdgeBlend(Number(e.target.value))}
-                disabled={tileCount === 1}
-                className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white disabled:opacity-30"
+                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
               />
               <div className="flex justify-between text-[9px] text-white/20 mt-1">
                 <span>Sharp</span><span>Soft</span><span>Heavy</span>
@@ -494,8 +531,7 @@ export default function ImageToPBR() {
                   onClick={() => setResolution(res)}
                   className={`py-2 text-xs font-bold rounded-lg transition-all ${resolution === res ? 'bg-white text-black' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
                 >
-                  {res}
-                  {res === '8K' && <span className="text-[8px] block">+1</span>}
+                  {res}{res === '8K' && <span className="text-[8px] block">+1</span>}
                 </button>
               ))}
             </div>
@@ -515,7 +551,7 @@ export default function ImageToPBR() {
             </button>
           </div>
 
-          {/* ── CREDIT TOTAL ── */}
+          {/* ── TOTAL ── */}
           <div className="flex items-center justify-between pt-1 border-t border-white/10">
             <span className="text-sm font-bold text-white/70">Total Cost:</span>
             <span className="text-2xl font-black">{calculateCredits()} Credits</span>
@@ -523,7 +559,6 @@ export default function ImageToPBR() {
         </aside>
       )}
 
-      {/* 3D PREVIEW TOGGLE */}
       {resultMaps.normal && (
         <button
           onClick={() => setShowPreview(!showPreview)}
@@ -533,14 +568,12 @@ export default function ImageToPBR() {
         </button>
       )}
 
-      {/* PROGRESS */}
       {isGenerating && generationProgress && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full shadow-2xl">
           <p className="text-sm font-medium">{generationProgress}</p>
         </div>
       )}
 
-      {/* BOTTOM BUTTON */}
       <footer className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-4xl px-4 sm:px-6">
         <div className="bg-gradient-to-t from-black via-black/90 to-transparent pb-2">
           {resultMaps.normal ? (
@@ -549,15 +582,13 @@ export default function ImageToPBR() {
                 onClick={() => setResultMaps({ normal: null, height: null, roughness: null, ao: null, original: null })}
                 className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl sm:rounded-2xl transition-all backdrop-blur-xl border border-white/10 shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
               >
-                <X size={18} />
-                <span>Reset</span>
+                <X size={18} /><span>Reset</span>
               </button>
               <button
                 onClick={handleDownloadAll}
                 className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white hover:bg-gray-100 text-black rounded-xl sm:rounded-2xl transition-all shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
               >
-                <Package size={18} />
-                <span>Download All (ZIP)</span>
+                <Package size={18} /><span>Download All (ZIP)</span>
               </button>
             </div>
           ) : (
@@ -567,20 +598,11 @@ export default function ImageToPBR() {
               className="w-full py-3 sm:py-3.5 bg-white hover:bg-gray-100 text-black font-bold text-sm sm:text-base rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 sm:gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white shadow-2xl"
             >
               {isGenerating ? (
-                <>
-                  <div className="h-4 w-4 sm:h-5 sm:w-5 border-2 border-black border-t-transparent animate-spin rounded-full" />
-                  <span>Generating PBR Maps...</span>
-                </>
+                <><div className="h-4 w-4 border-2 border-black border-t-transparent animate-spin rounded-full" /><span>Generating PBR Maps...</span></>
               ) : isCompositing ? (
-                <>
-                  <div className="h-4 w-4 border-2 border-black border-t-transparent animate-spin rounded-full" />
-                  <span>Building Tile Preview...</span>
-                </>
+                <><div className="h-4 w-4 border-2 border-black border-t-transparent animate-spin rounded-full" /><span>Updating Preview...</span></>
               ) : (
-                <>
-                  <Sparkles size={18} />
-                  <span>Generate PBR Maps ({calculateCredits()} Credits)</span>
-                </>
+                <><Sparkles size={18} /><span>Generate PBR Maps ({calculateCredits()} Credits)</span></>
               )}
             </button>
           )}
