@@ -1,20 +1,9 @@
 import { NextResponse } from 'next/server';
-import * as fal from '@fal-ai/client';
-
-fal.config({
-  credentials: process.env.FAL_KEY,
-});
+import { fal } from '@fal-ai/client';
 
 export async function POST(req) {
   try {
     const { image, prompt, aspectRatio } = await req.json();
-
-    // Map your aspect ratio values to fal's format
-    const aspectRatioMap = {
-      landscape: '16:9',
-      square: '1:1',
-      portrait: '9:16',
-    };
 
     const result = await fal.subscribe('fal-ai/flux/dev/image-to-image', {
       input: {
@@ -24,9 +13,11 @@ export async function POST(req) {
         num_inference_steps: 50,
         guidance_scale: 7.5,
       },
+      headers: {
+        'Authorization': `Key ${process.env.FAL_KEY}`,
+      },
     });
 
-    // fal returns images array, we normalize it to match what your page.js expects
     return NextResponse.json({
       status: 'succeeded',
       output: [result.images[0].url],
