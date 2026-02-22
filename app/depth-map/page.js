@@ -40,7 +40,7 @@ export default function DepthMapGenerator() {
 
     setIsGenerating(true);
     try {
-      const startRes = await fetch('/api/generate-depth-map', {
+      const response = await fetch('/api/generate-depth-map', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -50,24 +50,11 @@ export default function DepthMapGenerator() {
         }),
       });
 
-      let prediction = await startRes.json();
-      if (prediction.error) throw new Error(prediction.error);
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
 
-      while (prediction.status !== 'succeeded' && prediction.status !== 'failed') {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        const checkRes = await fetch('/api/generate-depth-map', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ predictionId: prediction.predictionId }),
-        });
-
-        prediction = await checkRes.json();
-        if (prediction.error) throw new Error(prediction.error);
-      }
-
-      if (prediction.status === 'succeeded') {
-        setResultDepthMap(prediction.output);
+      if (data.status === 'succeeded') {
+        setResultDepthMap(data.output);
         
         const { deductCredits } = await import('@/lib/credits');
         const { saveGeneration } = await import('@/lib/generations');
@@ -77,7 +64,7 @@ export default function DepthMapGenerator() {
           outsetaUid: user.uid,
           toolName: 'Depth Map Generator',
           prompt: 'Generate depth map from image',
-          imageUrl: prediction.output,
+          imageUrl: data.output,
           creditsUsed: 1,
         });
       } else {
@@ -88,6 +75,25 @@ export default function DepthMapGenerator() {
       alert(err.message || 'Error generating depth map');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!resultDepthMap) return;
+    try {
+      const response = await fetch(resultDepthMap);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `depth-map-${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.open(resultDepthMap, '_blank');
     }
   };
 
@@ -173,14 +179,13 @@ export default function DepthMapGenerator() {
                 <X size={18} className="sm:w-5 sm:h-5" />
                 <span>Reset</span>
               </button>
-              <a 
-                href={resultDepthMap} 
-                download 
+              <button
+                onClick={handleDownload}
                 className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white hover:bg-gray-100 text-black rounded-xl sm:rounded-2xl transition-all shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
               >
                 <Download size={18} className="sm:w-5 sm:h-5" />
                 <span>Download</span>
-              </a>
+              </button>
             </div>
           ) : (
             <button 
