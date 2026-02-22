@@ -53,55 +53,39 @@ export default function SceneStager() {
 
   // MAIN GENERATION ENGINE
   const handleGenerate = async () => {
-    if (!prompt || !file) return;
-    setIsGenerating(true);
+  if (!prompt || !file) return;
+  setIsGenerating(true);
 
-    try {
-      // 1. Prepare the input image (snapshot of 3D or the uploaded photo)
-      const inputImage = activeMode === '3d' ? captureCanvas() : file;
+  try {
+    const inputImage = activeMode === '3d' ? captureCanvas() : file;
 
-      // 2. Start the Prediction
-      const response = await fetch('/api/generate-scene', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: inputImage,
-          prompt: prompt,
-          aspectRatio: aspectRatio,
-        }),
-      });
+    const response = await fetch('/api/generate-scene', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image: inputImage,
+        prompt: prompt,
+        aspectRatio: aspectRatio,
+      }),
+    });
 
-      let prediction = await response.json();
-      if (prediction.error) throw new Error(prediction.error);
+    const result = await response.json();
 
-      // 3. Polling Loop: Check status every 2.5 seconds
-      while (prediction.status !== 'succeeded' && prediction.status !== 'failed') {
-        await new Promise((resolve) => setTimeout(resolve, 2500));
+    if (result.error) throw new Error(result.error);
 
-        const checkRes = await fetch('/api/generate-scene', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ predictionId: prediction.id }),
-        });
-
-        prediction = await checkRes.json();
-        if (prediction.error) throw new Error(prediction.error);
-      }
-
-      if (prediction.status === 'succeeded') {
-        // Replicate returns an array of images; we take the first one
-        setResultImage(prediction.output[0]);
-      } else {
-        throw new Error("AI generation failed. Please try a different prompt.");
-      }
-
-    } catch (err) {
-      console.error("Generation Error:", err);
-      alert(err.message || "An error occurred during generation.");
-    } finally {
-      setIsGenerating(false);
+    if (result.status === 'succeeded') {
+      setResultImage(result.output[0]);
+    } else {
+      throw new Error('AI generation failed. Please try a different prompt.');
     }
-  };
+
+  } catch (err) {
+    console.error('Generation Error:', err);
+    alert(err.message || 'An error occurred during generation.');
+  } finally {
+    setIsGenerating(false);
+  }
+};
 
   const getAspectClass = () => {
     if (aspectRatio === 'portrait') return 'max-w-[350px] aspect-[9/16]';

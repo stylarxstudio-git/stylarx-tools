@@ -1,32 +1,37 @@
 import { NextResponse } from 'next/server';
-import Replicate from 'replicate';
+import * as fal from '@fal-ai/serverless-client';
+
+fal.config({
+  credentials: process.env.FAL_KEY,
+});
 
 export async function POST(req) {
   try {
-    const { image, prompt, aspectRatio, predictionId } = await req.json();
+    const { image, prompt, aspectRatio } = await req.json();
 
-    const replicate = new Replicate({
-      auth: process.env.REPLICATE_API_TOKEN,
-    });
+    // Map your aspect ratio values to fal's format
+    const aspectRatioMap = {
+      landscape: '16:9',
+      square: '1:1',
+      portrait: '9:16',
+    };
 
-    if (predictionId) {
-      const prediction = await replicate.predictions.get(predictionId);
-      return NextResponse.json(prediction);
-    }
-
-    const prediction = await replicate.predictions.create({
-      version: "7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
+    const result = await fal.subscribe('fal-ai/flux/dev/image-to-image', {
       input: {
+        image_url: image,
         prompt: `A cinematic professional background for this object: ${prompt}. Photorealistic lighting, 8k, highly detailed environment.`,
-        image: image,
-        prompt_strength: 0.8,
+        strength: 0.8,
         num_inference_steps: 50,
         guidance_scale: 7.5,
-        refine: "expert_ensemble_refiner",
       },
     });
 
-    return NextResponse.json(prediction);
+    // fal returns images array, we normalize it to match what your page.js expects
+    return NextResponse.json({
+      status: 'succeeded',
+      output: [result.images[0].url],
+    });
+
   } catch (error) {
     console.error('Scene generation error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
