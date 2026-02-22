@@ -74,13 +74,12 @@ export default function SFXGenerator() {
   const [generationProgress, setGenerationProgress] = useState('');
   const [audioUrl, setAudioUrl] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   
-  // Settings
   const [category, setCategory] = useState('Weapons');
   const [duration, setDuration] = useState('auto');
   const [format, setFormat] = useState('mp3');
 
-  // Example prompts by category
   const examplePrompts = {
     'Weapons': [
       'Cyberpunk pistol reload with mechanical clicks',
@@ -130,6 +129,7 @@ export default function SFXGenerator() {
       'Campfire crackling and popping',
       'Birds chirping in forest morning',
     ],
+    'Custom': [],
   };
 
   const categories = Object.keys(examplePrompts);
@@ -157,7 +157,6 @@ export default function SFXGenerator() {
       });
 
       const data = await response.json();
-      
       if (data.error) throw new Error(data.error);
 
       setAudioUrl(data.audioUrl);
@@ -173,7 +172,6 @@ export default function SFXGenerator() {
 
   const togglePlay = () => {
     if (!audioRef.current) return;
-
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
@@ -183,15 +181,26 @@ export default function SFXGenerator() {
     }
   };
 
-  const handleDownload = () => {
-    if (!audioUrl) return;
-    
-    const link = document.createElement('a');
-    link.href = audioUrl;
-    link.download = `${prompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_')}_sfx.${format}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async () => {
+    if (!audioUrl || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const response = await fetch(audioUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${prompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_')}_sfx.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.open(audioUrl, '_blank');
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
@@ -202,20 +211,17 @@ export default function SFXGenerator() {
         {audioUrl ? (
           <div className="w-full h-full flex items-center justify-center p-4 sm:p-8">
             <div className="max-w-3xl w-full">
-              <div className="relative bg-white/5 rounded-2xl p-8 border border-white/10">
+              <div className="relative bg-[#111111] rounded-2xl p-8 border border-white/10 shadow-2xl">
                 
                 {/* Waveform Visualizer */}
                 <div className="mb-8 flex items-end justify-center gap-1 h-32">
                   {[...Array(50)].map((_, i) => (
                     <div
                       key={i}
-                      className={`w-2 bg-gradient-to-t from-green-500 via-emerald-400 to-teal-300 rounded-full transition-all ${
-                        isPlaying ? 'animate-pulse' : ''
-                      }`}
+                      className={`w-2 rounded-full transition-all ${isPlaying ? 'bg-white animate-pulse' : 'bg-white/30'}`}
                       style={{
                         height: `${Math.sin(i * 0.5) * 40 + 50}px`,
                         animationDelay: `${i * 0.02}s`,
-                        opacity: isPlaying ? 1 : 0.6,
                       }}
                     />
                   ))}
@@ -232,14 +238,14 @@ export default function SFXGenerator() {
                 {/* Play Button */}
                 <button
                   onClick={togglePlay}
-                  className="w-full mb-6 py-6 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 rounded-xl flex items-center justify-center gap-3 transition-all shadow-xl"
+                  className="w-full mb-6 py-5 bg-white hover:bg-neutral-100 rounded-xl flex items-center justify-center gap-3 transition-all shadow-xl"
                 >
                   {isPlaying ? (
-                    <Pause size={32} className="text-white" />
+                    <Pause size={28} className="text-black" />
                   ) : (
-                    <Play size={32} className="text-white" />
+                    <Play size={28} className="text-black" />
                   )}
-                  <span className="text-xl font-bold text-white">
+                  <span className="text-lg font-bold text-black">
                     {isPlaying ? 'Pause' : 'Play Sound'}
                   </span>
                 </button>
@@ -298,10 +304,8 @@ export default function SFXGenerator() {
             
             {/* LEFT SIDE - SETTINGS PANEL */}
             <aside className="w-full lg:w-72 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl order-2 lg:order-1">
-              
               <h3 className="text-xs text-white/60 uppercase tracking-wider mb-4 font-bold">Settings</h3>
               
-              {/* Category Selector */}
               <div className="mb-4">
                 <CustomDropdown
                   label="Category"
@@ -311,98 +315,78 @@ export default function SFXGenerator() {
                 />
               </div>
 
-              {/* Duration */}
               <div className="mb-4">
                 <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block font-bold">Duration</label>
                 <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => setDuration('quick')}
-                    className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
-                      duration === 'quick' 
-                        ? 'bg-white text-black shadow-lg' 
-                        : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
-                    }`}
-                  >
-                    Quick
-                    <span className="block text-[8px] opacity-60 mt-0.5">3-8s</span>
-                  </button>
-                  <button
-                    onClick={() => setDuration('auto')}
-                    className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
-                      duration === 'auto' 
-                        ? 'bg-white text-black shadow-lg' 
-                        : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
-                    }`}
-                  >
-                    Auto
-                    <span className="block text-[8px] opacity-60 mt-0.5">AI</span>
-                  </button>
-                  <button
-                    onClick={() => setDuration('full')}
-                    className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
-                      duration === 'full' 
-                        ? 'bg-white text-black shadow-lg' 
-                        : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
-                    }`}
-                  >
-                    Full
-                    <span className="block text-[8px] opacity-60 mt-0.5">8-15s</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Format */}
-              <div>
-                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block font-bold">Format</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setFormat('mp3')}
-                    className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
-                      format === 'mp3' 
-                        ? 'bg-white text-black shadow-lg' 
-                        : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
-                    }`}
-                  >
-                    MP3
-                    <span className="block text-[8px] opacity-60 mt-0.5">Smaller</span>
-                  </button>
-                  <button
-                    onClick={() => setFormat('wav')}
-                    className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
-                      format === 'wav' 
-                        ? 'bg-white text-black shadow-lg' 
-                        : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
-                    }`}
-                  >
-                    WAV
-                    <span className="block text-[8px] opacity-60 mt-0.5">Quality</span>
-                  </button>
-                </div>
-              </div>
-
-            </aside>
-
-            {/* RIGHT SIDE - SUGGESTIONS & PROMPT */}
-            <div className="flex-1 space-y-3 order-1 lg:order-2 w-full">
-              
-              {/* Example Prompts - Above Prompt Bar */}
-              <div>
-                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block font-bold">Popular in {category}</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {examplePrompts[category].slice(0, 4).map((example, i) => (
+                  {['quick', 'auto', 'full'].map((d) => (
                     <button
-                      key={i}
-                      onClick={() => setPrompt(example)}
-                      className="px-3 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-left text-white/70 hover:text-white transition-all truncate"
-                      title={example}
+                      key={d}
+                      onClick={() => setDuration(d)}
+                      className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
+                        duration === d
+                          ? 'bg-white text-black shadow-lg'
+                          : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                      }`}
                     >
-                      {example}
+                      {d.charAt(0).toUpperCase() + d.slice(1)}
+                      <span className="block text-[8px] opacity-60 mt-0.5">
+                        {d === 'quick' ? '3-8s' : d === 'auto' ? 'AI' : '8-15s'}
+                      </span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Prompt Input & Generate */}
+              <div>
+                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block font-bold">Format</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {['mp3', 'wav'].map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setFormat(f)}
+                      className={`py-2.5 text-xs font-bold rounded-lg transition-all ${
+                        format === f
+                          ? 'bg-white text-black shadow-lg'
+                          : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                      }`}
+                    >
+                      {f.toUpperCase()}
+                      <span className="block text-[8px] opacity-60 mt-0.5">
+                        {f === 'mp3' ? 'Smaller' : 'Quality'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            {/* RIGHT SIDE - SUGGESTIONS & PROMPT */}
+            <div className="flex-1 space-y-3 order-1 lg:order-2 w-full">
+              
+              {category !== 'Custom' && (
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block font-bold">Popular in {category}</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {examplePrompts[category].slice(0, 4).map((example, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setPrompt(example)}
+                        className="px-3 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-left text-white/70 hover:text-white transition-all truncate"
+                        title={example}
+                      >
+                        {example}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {category === 'Custom' && (
+                <div className="px-1">
+                  <p className="text-[10px] text-white/40 uppercase tracking-wider font-bold">Custom — type anything below</p>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="text"
@@ -442,21 +426,19 @@ export default function SFXGenerator() {
       {audioUrl && (
         <footer className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-3">
           <button 
-            onClick={() => {
-              setAudioUrl(null);
-              setIsPlaying(false);
-            }} 
+            onClick={() => { setAudioUrl(null); setIsPlaying(false); }} 
             className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl sm:rounded-2xl transition-all backdrop-blur-xl border border-white/10 shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
           >
-            <X size={18} className="sm:w-5 sm:h-5" />
+            <X size={18} />
             <span>Reset</span>
           </button>
           <button
             onClick={handleDownload}
-            className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white hover:bg-gray-100 text-black rounded-xl sm:rounded-2xl transition-all shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base"
+            disabled={isDownloading}
+            className="px-6 py-3 sm:px-8 sm:py-3.5 bg-white hover:bg-neutral-100 text-black rounded-xl sm:rounded-2xl transition-all shadow-2xl flex items-center gap-2 font-bold text-sm sm:text-base disabled:opacity-50"
           >
-            <Download size={18} className="sm:w-5 sm:h-5" />
-            <span>Download {format.toUpperCase()}</span>
+            <Download size={18} />
+            <span>{isDownloading ? 'Downloading...' : `Download ${format.toUpperCase()}`}</span>
           </button>
         </footer>
       )}
