@@ -19,9 +19,20 @@ export async function POST(req) {
       },
     });
 
+    // Log the result so we can see its structure
+    console.log('FAL RESULT:', JSON.stringify(result));
+
+    // fal sometimes returns result.data.images or result.images
+    const images = result?.images || result?.data?.images;
+    const imageUrl = images?.[0]?.url || images?.[0];
+
+    if (!imageUrl) {
+      throw new Error('No image returned from fal');
+    }
+
     return NextResponse.json({
       status: 'succeeded',
-      output: [result.images[0].url],
+      output: [imageUrl],
     });
 
   } catch (error) {
