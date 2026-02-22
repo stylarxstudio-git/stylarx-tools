@@ -3,7 +3,7 @@ import { useState, Suspense, useRef } from 'react';
 import { Canvas, useLoader } from '@react-three/fiber';
 import { OrbitControls, Sphere, useGLTF, Environment, ContactShadows } from '@react-three/drei';
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader';
-import { ArrowLeft, Sparkles, Download, X, Settings, Box, Layers, RefreshCw, Zap } from 'lucide-react';
+import { ArrowLeft, Sparkles, Download, X, Settings, Box, Layers, RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 import * as THREE from 'three';
@@ -75,21 +75,8 @@ export default function HDRIGenerator() {
       const data = await response.json();
       if (data.error) throw new Error(data.error);
 
-      let prediction = data;
-      while (prediction.status !== 'succeeded' && prediction.status !== 'failed') {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const checkResponse = await fetch('/api/generate-hdri', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ predictionId: prediction.id }),
-        });
-        
-        prediction = await checkResponse.json();
-      }
-
-      if (prediction.status === 'succeeded') {
-        setResultImage(prediction.output[0]);
+      if (data.status === 'succeeded') {
+        setResultImage(data.output[0]);
 
         const { deductCredits } = await import('@/lib/credits');
         const { saveGeneration } = await import('@/lib/generations');
@@ -99,7 +86,7 @@ export default function HDRIGenerator() {
           outsetaUid: user.uid,
           toolName: 'HDRI Generator',
           prompt: prompt,
-          imageUrl: prediction.output[0],
+          imageUrl: data.output[0],
           creditsUsed: 1,
         });
       } else {
@@ -110,6 +97,24 @@ export default function HDRIGenerator() {
       alert(err.message || 'Error generating HDRI');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!resultImage) return;
+    try {
+      const response = await fetch(resultImage);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `hdri-${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      window.open(resultImage, '_blank');
     }
   };
 
@@ -133,7 +138,6 @@ export default function HDRIGenerator() {
                       `#include <uv_vertex>
                        vCustomUv = uv;`
                     );
-
                     shader.fragmentShader = `varying vec2 vCustomUv;` + shader.fragmentShader.replace(
                       `#include <dithering_fragment>`,
                       `
@@ -271,7 +275,7 @@ export default function HDRIGenerator() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !isGenerating && handleGenerate()}
-              placeholder="Atmospheric studio lighting..."
+              placeholder="Describe your environment... (e.g. golden hour forest)"
               disabled={isGenerating}
               className="flex-1 bg-transparent px-4 py-3 outline-none text-white text-sm md:text-base placeholder-white/20"
             />
@@ -298,12 +302,18 @@ export default function HDRIGenerator() {
 
       {resultImage && (
         <div className="absolute top-6 right-6 md:top-8 md:right-8 z-50 flex gap-2 md:gap-3 pointer-events-auto">
-          <button onClick={() => setResultImage(null)} className="p-2 md:p-3 bg-white/10 hover:bg-white/20 rounded-full border border-white/10 transition-all text-white/70">
+          <button 
+            onClick={() => setResultImage(null)} 
+            className="p-2 md:p-3 bg-white/10 hover:bg-white/20 rounded-full border border-white/10 transition-all text-white/70"
+          >
             <X size={20} />
           </button>
-          <a href={resultImage} download className="p-2 md:p-3 bg-white text-black rounded-full hover:scale-105 transition-transform shadow-2xl">
+          <button 
+            onClick={handleDownload}
+            className="p-2 md:p-3 bg-white text-black rounded-full hover:scale-105 transition-transform shadow-2xl"
+          >
             <Download size={20} />
-          </a>
+          </button>
         </div>
       )}
     </div>
