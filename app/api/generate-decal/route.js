@@ -36,27 +36,36 @@ export async function POST(req) {
     }
 
     enhancedPrompt += `, ${styleKeywords[style] || styleKeywords['Realistic']}`;
-    enhancedPrompt += ', isolated object, decal, transparent background, no background, floating object, sticker style';
+    enhancedPrompt += ', on a plain white background, isolated object, centered, product photography style';
 
-    const result = await fal.subscribe('fal-ai/flux/dev', {
+    // Step 1: Generate with Flux 1.1 Pro
+    const generated = await fal.subscribe('fal-ai/flux-pro/v1.1', {
       input: {
         prompt: enhancedPrompt,
-        negative_prompt: "background, scene, environment, landscape, blurry, low quality",
+        negative_prompt: "complex background, scene, environment, landscape, blurry, low quality, multiple objects",
         image_size: { width: 1024, height: 1024 },
-        num_inference_steps: 25,
-        guidance_scale: 7.5,
+        num_inference_steps: 28,
+        guidance_scale: 3.5,
         num_images: 1,
       },
     });
 
-    const images = result?.images || result?.data?.images;
-    const imageUrl = images?.[0]?.url || images?.[0];
+    const images = generated?.images || generated?.data?.images;
+    const generatedUrl = images?.[0]?.url || images?.[0];
+    if (!generatedUrl) throw new Error('No image returned from fal');
 
-    if (!imageUrl) throw new Error('No image returned from fal');
+    // Step 2: Remove background to make it transparent
+    const bgRemoved = await fal.subscribe('fal-ai/imageutils/rembg', {
+      input: {
+        image_url: generatedUrl,
+      },
+    });
+
+    const finalUrl = bgRemoved?.image?.url || bgRemoved?.data?.image?.url || generatedUrl;
 
     return NextResponse.json({
       status: 'succeeded',
-      output: [imageUrl],
+      output: [finalUrl],
     });
 
   } catch (error) {
