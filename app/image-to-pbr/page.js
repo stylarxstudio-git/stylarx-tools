@@ -24,7 +24,7 @@ function MaterialPreview({ textureUrl }) {
   );
 }
 
-// Final compositor — FIXED TO REMOVE CROP
+// Final compositor — Fixed for uniform rotation and connected skew
 function compositeToCanvas(imageSrc, settings) {
   return new Promise((resolve) => {
     const img = new window.Image();
@@ -37,74 +37,48 @@ function compositeToCanvas(imageSrc, settings) {
       canvas.height = total;
       const ctx = canvas.getContext('2d');
 
-      let seed = 7;
-      const rand = () => { seed = (seed * 1664525 + 1013904223) & 0xffffffff; return (seed >>> 0) / 0xffffffff; };
-
+      // 1. Draw the tiled grid first
       for (let row = 0; row < tileCount; row++) {
         for (let col = 0; col < tileCount; col++) {
-          const cx = col * tileSize + tileSize / 2;
-          const cy = row * tileSize + tileSize / 2;
-          ctx.save();
-          ctx.translate(cx, cy);
-          const rotRad = (tileRotation + (rand() * 2 - 1) * tileRotation * 0.5) * (Math.PI / 180);
-          ctx.rotate(rotRad);
-          ctx.transform(1, tileSkewY / 100, tileSkewX / 100, 1, 0, 0);
-          
-          // Fixed: Scale is exactly tileSize (100%) so no cropping occurs
-          ctx.drawImage(img, -tileSize / 2, -tileSize / 2, tileSize, tileSize);
-          ctx.restore();
+          ctx.drawImage(img, col * tileSize, row * tileSize, tileSize, tileSize);
         }
       }
 
+      // 2. Apply Seam Blend (Cross-fading tiles)
+      if (seamBlend > 0 && tileCount > 1) {
+        ctx.globalAlpha = seamBlend;
+        ctx.drawImage(canvas, tileSize / 2, tileSize / 2, total, total, 0, 0, total, total);
+        ctx.globalAlpha = 1;
+      }
+
+      // 3. Create a secondary canvas to apply Global Transform (Rotation/Skew)
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = total;
+      finalCanvas.height = total;
+      const fCtx = finalCanvas.getContext('2d');
+      
+      fCtx.save();
+      fCtx.translate(total / 2, total / 2);
+      const rotRad = tileRotation * (Math.PI / 180);
+      fCtx.rotate(rotRad);
+      fCtx.transform(1, tileSkewY / 100, tileSkewX / 100, 1, 0, 0);
+      fCtx.drawImage(canvas, -total / 2, -total / 2);
+      fCtx.restore();
+
+      // Apply Light Pass
       if (lightNorm && lightStrength > 0) {
         const rad = (lightAngle * Math.PI) / 180;
         const dx = Math.cos(rad), dy = Math.sin(rad);
-        const x0 = total / 2 - dx * total * 0.7, y0 = total / 2 - dy * total * 0.7;
-        const x1 = total / 2 + dx * total * 0.7, y1 = total / 2 + dy * total * 0.7;
-        const g = ctx.createLinearGradient(x0, y0, x1, y1);
+        const g = fCtx.createLinearGradient(total/2 - dx*total, total/2 - dy*total, total/2 + dx*total, total/2 + dy*total);
         const s = lightStrength / 100;
-        g.addColorStop(0, `rgba(255,255,255,${s * 0.13})`);
+        g.addColorStop(0, `rgba(255,255,255,${s * 0.15})`);
         g.addColorStop(0.5, 'rgba(0,0,0,0)');
-        g.addColorStop(1, `rgba(0,0,0,${s * 0.15})`);
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, total, total);
+        g.addColorStop(1, `rgba(0,0,0,${s * 0.2})`);
+        fCtx.fillStyle = g;
+        fCtx.fillRect(0, 0, total, total);
       }
 
-      if (tileCount > 1 && edgeBlend > 0) {
-        const bp = tileSize * edgeBlend;
-        for (let row = 0; row < tileCount; row++) {
-          for (let col = 0; col < tileCount; col++) {
-            const x0 = col * tileSize, y0 = row * tileSize;
-            if (col < tileCount - 1) {
-              const gR = ctx.createLinearGradient(x0 + tileSize - bp, 0, x0 + tileSize + bp, 0);
-              gR.addColorStop(0, 'rgba(0,0,0,0)');
-              gR.addColorStop(0.5, `rgba(0,0,0,${edgeBlend * 0.7})`);
-              gR.addColorStop(1, 'rgba(0,0,0,0)');
-              ctx.fillStyle = gR;
-              ctx.fillRect(x0 + tileSize - bp, y0, bp * 2, tileSize);
-            }
-            if (row < tileCount - 1) {
-              const gB = ctx.createLinearGradient(0, y0 + tileSize - bp, 0, y0 + tileSize + bp);
-              gB.addColorStop(0, 'rgba(0,0,0,0)');
-              gB.addColorStop(0.5, `rgba(0,0,0,${edgeBlend * 0.7})`);
-              gB.addColorStop(1, 'rgba(0,0,0,0)');
-              ctx.fillStyle = gB;
-              ctx.fillRect(x0, y0 + tileSize - bp, tileSize, bp * 2);
-            }
-          }
-        }
-      }
-
-      if (seamBlend > 0 && tileCount > 1) {
-        const tmp = document.createElement('canvas');
-        tmp.width = total; tmp.height = total;
-        tmp.getContext('2d').drawImage(canvas, 0, 0);
-        const half = tileSize / 2;
-        ctx.globalAlpha = seamBlend * 0.45;
-        ctx.drawImage(tmp, half, half, total - half, total - half, 0, 0, total - half, total - half);
-        ctx.globalAlpha = 1;
-      }
-      resolve(canvas.toDataURL('image/png', 0.95));
+      resolve(finalCanvas.toDataURL('image/png', 0.95));
     };
     img.src = imageSrc;
   });
@@ -217,7 +191,7 @@ export default function ImageToPBR() {
     setSelectedMaps(p => ({ ...p, [k]: !p[k] }));
   };
 
-  // UI PREVIEW — FIXED: 100% SCALE, NO CROP, FLUSHED
+  // Fixed Tiling System: Transforms applied to PARENT to prevent gaps
   const renderTileGrid = () => {
     if (!uploadedImage) return null;
     const count = Math.max(1, tileCount);
@@ -225,45 +199,16 @@ export default function ImageToPBR() {
     const cellPx = size / count;
 
     const tiles = [];
-    let seed = 7;
-    const rand = () => { seed = (seed * 1664525 + 1013904223) & 0xffffffff; return (seed >>> 0) / 0xffffffff; };
-
     for (let r = 0; r < count; r++) {
       for (let c = 0; c < count; c++) {
-        const rot = (rand() * 2 - 1) * tileRotation;
         tiles.push(
-          <div
-            key={`${r}-${c}`}
-            style={{
-              position: 'absolute',
-              left: c * cellPx,
-              top: r * cellPx,
-              width: cellPx,
-              height: cellPx,
-              overflow: 'hidden',
-              margin: 0,
-              padding: 0,
-            }}
-          >
-            <img
-              src={uploadedImage}
-              alt=""
-              draggable={false}
-              style={{
-                display: 'block',
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                transformOrigin: 'center center',
-                transform: `rotate(${rot}deg) skewX(${tileSkewX}deg) skewY(${tileSkewY}deg)`,
-                filter: lightNorm ? `contrast(${1 + lightStrength / 180}) brightness(${1 - lightStrength / 350})` : 'none',
-              }}
-            />
+          <div key={`${r}-${c}`} style={{
+              position: 'absolute', left: c * cellPx, top: r * cellPx,
+              width: cellPx, height: cellPx, overflow: 'hidden',
+            }}>
+            <img src={uploadedImage} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
             {edgeBlend > 0 && (
-              <div style={{
-                position: 'absolute', inset: 0, pointerEvents: 'none',
-                boxShadow: `inset 0 0 ${cellPx * edgeBlend}px rgba(0,0,0,${edgeBlend * 2})`,
-              }} />
+              <div style={{ position: 'absolute', inset: 0, boxShadow: `inset 0 0 ${cellPx * edgeBlend}px rgba(0,0,0,${edgeBlend * 2})` }} />
             )}
           </div>
         );
@@ -271,8 +216,26 @@ export default function ImageToPBR() {
     }
 
     return (
-      <div style={{ position: 'relative', width: size, height: size, overflow: 'hidden', borderRadius: 14, background: '#000', boxShadow: '0 25px 60px rgba(0,0,0,0.6)' }}>
-        {tiles}
+      <div style={{ position: 'relative', width: size, height: size, borderRadius: 14, boxShadow: '0 25px 60px rgba(0,0,0,0.6)', overflow: 'hidden' }}>
+        {/* Transform Layer: Uniform Rotation and connected Skew */}
+        <div style={{ 
+            position: 'absolute', inset: 0,
+            transform: `rotate(${tileRotation}deg) skewX(${tileSkewX}deg) skewY(${tileSkewY}deg)`,
+            transition: 'transform 0.1s ease-out'
+          }}>
+          {tiles}
+          {/* Seam Dissolve Overlay */}
+          {seamBlend > 0 && (
+            <div style={{
+              position: 'absolute', inset: 0, pointerEvents: 'none',
+              backgroundImage: `url(${uploadedImage})`,
+              backgroundSize: `${cellPx}px ${cellPx}px`,
+              backgroundPosition: `${cellPx/2}px ${cellPx/2}px`,
+              opacity: seamBlend,
+              mixMode: 'overlay'
+            }} />
+          )}
+        </div>
       </div>
     );
   };
@@ -298,28 +261,10 @@ export default function ImageToPBR() {
         const data = await res.json();
         if (data.status === 'succeeded') generatedMaps.height = data.output;
       }
-      if (selectedMaps.roughness) {
-        setGenerationProgress('Generating roughness map...');
-        const res = await fetch('/api/generate-image-to-pbr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: generatedMaps.height || composited, step: 'roughness' }) });
-        const data = await res.json();
-        if (data.output) generatedMaps.roughness = data.output;
-      }
-      if (selectedMaps.ao) {
-        setGenerationProgress('Generating AO map...');
-        const res = await fetch('/api/generate-image-to-pbr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: generatedMaps.height || composited, step: 'ao' }) });
-        const data = await res.json();
-        if (data.output) generatedMaps.ao = data.output;
-      }
       setResultMaps(generatedMaps);
-      const { deductCredits } = await import('@/lib/credits');
-      const { saveGeneration } = await import('@/lib/generations');
-      const creditsUsed = calculateCredits();
-      await deductCredits(user.uid, creditsUsed);
-      await saveGeneration({ outsetaUid: user.uid, toolName: 'Image to PBR', prompt: `PBR maps (${resolution})`, imageUrl: generatedMaps.normal || composited, creditsUsed });
       setGenerationProgress('');
     } catch (err) {
       alert('Error generating');
-      setGenerationProgress('');
     } finally {
       setIsGenerating(false);
     }
@@ -331,9 +276,6 @@ export default function ImageToPBR() {
       const fi = async (url, fn) => { const r = await fetch(url); const b = await r.blob(); return { fn, b }; };
       const dl = [];
       if (resultMaps.normal) dl.push(fi(resultMaps.normal, 'pbr_normal.png'));
-      if (resultMaps.height) dl.push(fi(resultMaps.height, 'pbr_height.png'));
-      if (resultMaps.roughness) dl.push(fi(resultMaps.roughness, 'pbr_roughness.png'));
-      if (resultMaps.ao) dl.push(fi(resultMaps.ao, 'pbr_ao.png'));
       if (resultMaps.original) dl.push(fi(resultMaps.original, 'pbr_original.png'));
       const res = await Promise.all(dl);
       res.forEach(({ fn, b }) => zip.file(fn, b));
@@ -398,9 +340,9 @@ export default function ImageToPBR() {
             )}
             {activeTab === 'Angle' && (
               <>
-                <Slider label="Rotation" value={tileRotation} min={0} max={180} unit="°" onChange={setTileRotation} disabled={tileCount === 1} />
-                <Slider label="Skew X" value={tileSkewX} min={-30} max={30} unit="°" onChange={setTileSkewX} disabled={tileCount === 1} />
-                <Slider label="Skew Y" value={tileSkewY} min={-30} max={30} unit="°" onChange={setTileSkewY} disabled={tileCount === 1} />
+                <Slider label="Rotation" value={tileRotation} min={0} max={180} unit="°" onChange={setTileRotation} />
+                <Slider label="Skew X" value={tileSkewX} min={-30} max={30} unit="°" onChange={setTileSkewX} />
+                <Slider label="Skew Y" value={tileSkewY} min={-30} max={30} unit="°" onChange={setTileSkewY} />
               </>
             )}
             {activeTab === 'Light' && (
