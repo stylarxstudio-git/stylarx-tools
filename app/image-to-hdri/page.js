@@ -182,11 +182,28 @@ export default function ImageToHDRI() {
 
       <div className="fixed inset-0 z-0">
         {resultHDRI ? (
-          <Canvas shadows camera={{ position: [0, 0, 10], fov: 50 }}>
+          <Canvas
+            shadows
+            // Camera starts INSIDE the sphere at origin
+            camera={{ position: [0, 0, 0.1], fov: 75 }}
+            gl={{ antialias: true }}
+          >
             <Suspense fallback={null}>
               <HDRIPreview textureUrl={resultHDRI} />
             </Suspense>
-            <OrbitControls makeDefault enableZoom={true} autoRotate={autoRotate} autoRotateSpeed={rotateSpeed} />
+            <OrbitControls
+              makeDefault
+              enableZoom={true}
+              enablePan={false}
+              autoRotate={autoRotate}
+              autoRotateSpeed={rotateSpeed}
+              // minDistance keeps camera inside sphere, maxDistance stops it
+              // from ever reaching or passing the sphere wall (radius 500)
+              minDistance={0.1}
+              maxDistance={490}
+              zoomSpeed={3}
+              rotateSpeed={0.5}
+            />
           </Canvas>
         ) : uploadedImage ? (
           <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a] group">

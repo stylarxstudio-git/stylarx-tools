@@ -23,10 +23,11 @@ export async function POST(req) {
     const result = await fal.subscribe('fal-ai/flux-pro/kontext', {
       input: {
         image_url: imageUrl,
-        prompt: '360 degree equirectangular panoramic HDRI environment map, photorealistic lighting, seamless spherical panorama, high dynamic range, smooth horizon, no visible seams, professional HDRI lighting environment',
-        guidance_scale: 7.5,
-        num_inference_steps: 50,
-        strength: 0.75,
+        prompt: 'Expand this image into a full seamless 360 degree equirectangular panorama. Keep the original subject exactly as is in the center. Naturally extend the environment in all directions — left, right, above and below — maintaining the same lighting, atmosphere, color palette and style. The final image must be a wide 2:1 aspect ratio panoramic environment map with a natural horizon, smooth sky, and ground, with no borders, no black bars, no seams, photorealistic.',
+        image_size: { width: 2048, height: 1024 },
+        num_inference_steps: 28,
+        guidance_scale: 3.5,
+        num_images: 1,
       },
     });
 
