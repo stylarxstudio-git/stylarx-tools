@@ -49,25 +49,29 @@ export async function POST(req) {
 
     // STEP 1: Generate Albedo
     if (step === 'albedo') {
-      let enhancedPrompt = prompt;
+  let enhancedPrompt = prompt;
 
-      if (category && category !== 'Auto') {
-        enhancedPrompt = `${categoryKeywords[category] || ''} ${prompt}`;
-      }
+  if (category && category !== 'Auto') {
+    enhancedPrompt = `${categoryKeywords[category] || ''} ${prompt}`;
+  }
 
-      enhancedPrompt += `, ${styleKeywords[style] || styleKeywords['Photorealistic']}`;
-      enhancedPrompt += ', PBR texture map, flat top-down view, no shadows, no highlights, evenly lit, seamless tileable texture, isolated material surface';
+  enhancedPrompt += `, ${styleKeywords[style] || styleKeywords['Photorealistic']}`;
+  
+  // This is the key change — force flat texture pattern, not a photo
+  enhancedPrompt = `seamless tileable texture map of ${enhancedPrompt}, flat top-down macro view, uniform surface pattern, zoomed in material surface, no objects, no perspective, no scene, evenly lit diffuse texture, game-ready PBR albedo map, texture sheet, repeating pattern, studio scan`;
 
-      if (seamless) {
-        enhancedPrompt += ', seamless repeating pattern, tileable';
-      }
+  if (seamless) {
+    enhancedPrompt += ', perfectly seamless, tileable edges, no border, repeating';
+  }
+
+  enhancedPrompt += ', negative space: shadows, objects, people, faces, perspective, 3D render, scene, environment, dark edges';
 
       const size = resolutionMap[resolution] || { width: 1024, height: 1024 };
 
       const result = await fal.subscribe('fal-ai/flux-pro/v1.1', {
         input: {
           prompt: enhancedPrompt,
-          negative_prompt: 'shadows, highlights, people, faces, text, watermark, perspective, 3d render, background, scene',
+          negative_prompt: 'object, item, product, scene, environment, background, people, faces, text, watermark, perspective, 3d render, shadows, dark corners, vignette, ball, sphere, closeup object',
           image_size: size,
           num_inference_steps: 28,
           guidance_scale: 3.5,
