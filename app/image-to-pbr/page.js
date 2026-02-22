@@ -24,16 +24,14 @@ function MaterialPreview({ textureUrl }) {
   );
 }
 
-// Final compositor — runs once on Generate
+// Final compositor — FLUSHED AND JOINED
 function compositeToCanvas(imageSrc, settings) {
   return new Promise((resolve) => {
     const img = new window.Image();
     img.onload = () => {
       const { tileCount, tileRotation, tileSkewX, tileSkewY, edgeBlend, lightNorm, lightStrength, lightAngle, seamBlend } = settings;
       const tileSize = 1024;
-      const cols = tileCount;
-      const rows = tileCount;
-      const total = cols * tileSize;
+      const total = tileCount * tileSize;
       const canvas = document.createElement('canvas');
       canvas.width = total;
       canvas.height = total;
@@ -42,18 +40,20 @@ function compositeToCanvas(imageSrc, settings) {
       let seed = 7;
       const rand = () => { seed = (seed * 1664525 + 1013904223) & 0xffffffff; return (seed >>> 0) / 0xffffffff; };
 
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
+      for (let row = 0; row < tileCount; row++) {
+        for (let col = 0; col < tileCount; col++) {
           const cx = col * tileSize + tileSize / 2;
           const cy = row * tileSize + tileSize / 2;
+          
           ctx.save();
+          // This keeps the tiles flush against each other
           ctx.translate(cx, cy);
-          // Per-tile rotation jitter based on tileRotation setting
           const rotRad = (tileRotation + (rand() * 2 - 1) * tileRotation * 0.5) * (Math.PI / 180);
           ctx.rotate(rotRad);
-          // Per-tile skew
           ctx.transform(1, tileSkewY / 100, tileSkewX / 100, 1, 0, 0);
-          const scale = tileSize * 1.08;
+
+          // Draw the image large enough so that rotation NEVER leaves a gap at the joints
+          const scale = tileSize * 1.42; // Pythagorean diagonal ratio to ensure full coverage
           ctx.drawImage(img, -scale / 2, -scale / 2, scale, scale);
           ctx.restore();
         }
@@ -77,10 +77,10 @@ function compositeToCanvas(imageSrc, settings) {
       // Edge blend between tiles
       if (tileCount > 1 && edgeBlend > 0) {
         const bp = tileSize * edgeBlend;
-        for (let row = 0; row < rows; row++) {
-          for (let col = 0; col < cols; col++) {
+        for (let row = 0; row < tileCount; row++) {
+          for (let col = 0; col < tileCount; col++) {
             const x0 = col * tileSize, y0 = row * tileSize;
-            if (col < cols - 1) {
+            if (col < tileCount - 1) {
               const gR = ctx.createLinearGradient(x0 + tileSize - bp, 0, x0 + tileSize + bp, 0);
               gR.addColorStop(0, 'rgba(0,0,0,0)');
               gR.addColorStop(0.5, `rgba(0,0,0,${edgeBlend * 0.7})`);
@@ -88,7 +88,7 @@ function compositeToCanvas(imageSrc, settings) {
               ctx.fillStyle = gR;
               ctx.fillRect(x0 + tileSize - bp, y0, bp * 2, tileSize);
             }
-            if (row < rows - 1) {
+            if (row < tileCount - 1) {
               const gB = ctx.createLinearGradient(0, y0 + tileSize - bp, 0, y0 + tileSize + bp);
               gB.addColorStop(0, 'rgba(0,0,0,0)');
               gB.addColorStop(0.5, `rgba(0,0,0,${edgeBlend * 0.7})`);
@@ -100,7 +100,6 @@ function compositeToCanvas(imageSrc, settings) {
         }
       }
 
-      // Seam blend — copy to temp first, can't draw canvas onto itself
       if (seamBlend > 0 && tileCount > 1) {
         const tmp = document.createElement('canvas');
         tmp.width = total; tmp.height = total;
@@ -119,10 +118,8 @@ function compositeToCanvas(imageSrc, settings) {
 
 const TABS = ['Grid', 'Angle', 'Light', 'Output'];
 
-// Smooth slider — works with both mouse and touch drag
 function Slider({ label, value, min, max, step = 1, unit = '', onChange, disabled = false }) {
   const trackRef = useRef();
-
   const getValueFromEvent = (clientX) => {
     const rect = trackRef.current.getBoundingClientRect();
     const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
@@ -130,47 +127,30 @@ function Slider({ label, value, min, max, step = 1, unit = '', onChange, disable
     const stepped = Math.round(raw / step) * step;
     return Math.min(max, Math.max(min, parseFloat(stepped.toFixed(10))));
   };
-
   const handlePointerDown = (e) => {
     if (disabled) return;
     e.preventDefault();
     trackRef.current.setPointerCapture(e.pointerId);
     onChange(getValueFromEvent(e.clientX));
   };
-
   const handlePointerMove = (e) => {
     if (disabled) return;
     if (e.buttons === 0 && e.pressure === 0) return;
     onChange(getValueFromEvent(e.clientX));
   };
-
   const pct = ((value - min) / (max - min)) * 100;
-
-  const displayVal = step < 1
-    ? (value * 100).toFixed(0) + (unit || '%')
-    : `${value}${unit}`;
-
+  const displayVal = step < 1 ? (value * 100).toFixed(0) + (unit || '%') : `${value}${unit}`;
   return (
     <div className={`mb-5 transition-opacity select-none ${disabled ? 'opacity-25 pointer-events-none' : 'opacity-100'}`}>
       <div className="flex justify-between text-[11px] mb-2">
         <span className="text-white/50 font-medium">{label}</span>
         <span className="text-white font-bold">{displayVal}</span>
       </div>
-      <div
-        ref={trackRef}
-        className="relative h-5 flex items-center cursor-pointer"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-      >
-        {/* Track */}
+      <div ref={trackRef} className="relative h-5 flex items-center cursor-pointer" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}>
         <div className="absolute w-full h-1.5 bg-white/10 rounded-full">
           <div className="h-full bg-white rounded-full" style={{ width: `${pct}%` }} />
         </div>
-        {/* Thumb */}
-        <div
-          className="absolute w-4 h-4 bg-white rounded-full shadow-lg border border-white/30"
-          style={{ left: `calc(${pct}% - 8px)` }}
-        />
+        <div className="absolute w-4 h-4 bg-white rounded-full shadow-lg border border-white/30" style={{ left: `calc(${pct}% - 8px)` }} />
       </div>
     </div>
   );
@@ -201,26 +181,18 @@ export default function ImageToPBR() {
   const [activeTab, setActiveTab] = useState('Grid');
   const [showPreview, setShowPreview] = useState(false);
 
-  // Grid / Tiling
   const [tileCount, setTileCount] = useState(1);
   const [edgeBlend, setEdgeBlend] = useState(0.05);
   const [seamBlend, setSeamBlend] = useState(0);
-
-  // Angle — per-tile transforms
   const [tileRotation, setTileRotation] = useState(0);
   const [tileSkewX, setTileSkewX] = useState(0);
   const [tileSkewY, setTileSkewY] = useState(0);
-
-  // Light
   const [lightNorm, setLightNorm] = useState(false);
   const [lightStrength, setLightStrength] = useState(40);
   const [lightAngle, setLightAngle] = useState(45);
-
-  // Output / PBR
   const [selectedMaps, setSelectedMaps] = useState({ normal: true, height: true, roughness: true, ao: true });
   const [resolution, setResolution] = useState('4K');
   const [pbSeamless, setPbSeamless] = useState(false);
-
   const [resultMaps, setResultMaps] = useState({ normal: null, height: null, roughness: null, ao: null, original: null });
 
   const calculateCredits = () => {
@@ -252,26 +224,16 @@ export default function ImageToPBR() {
     setSelectedMaps(p => ({ ...p, [k]: !p[k] }));
   };
 
-  // ── Instant CSS tiling preview ───────────────────────────────────────────
-  // Uses CSS background-repeat so tiles are ALWAYS perfectly flush — no gaps possible.
-  // Per-tile rotation is applied via a canvas-drawn background image with each tile
-  // pre-rotated, generated only when rotation changes.
+  // UI PREVIEW: Flushed, joined, and seamless
   const renderTileGrid = () => {
     if (!uploadedImage) return null;
     const count = Math.max(1, tileCount);
-    const size = 560; // total preview size always 560px
+    const size = 560; 
+    const cellPx = size / count;
 
-    const tilePercent = 100 / count;
-    const filterStr = lightNorm
-      ? `contrast(${1 + lightStrength / 180}) brightness(${1 - lightStrength / 350})`
-      : 'none';
-
-    // Each tile is a separate absolutely-positioned div using background-image
-    // so they are always exactly flush — CSS handles layout with no gaps
     const tiles = [];
     let seed = 7;
     const rand = () => { seed = (seed * 1664525 + 1013904223) & 0xffffffff; return (seed >>> 0) / 0xffffffff; };
-    const cellPx = size / count;
 
     for (let r = 0; r < count; r++) {
       for (let c = 0; c < count; c++) {
@@ -283,38 +245,30 @@ export default function ImageToPBR() {
               position: 'absolute',
               left: c * cellPx,
               top: r * cellPx,
-              width: cellPx,
-              height: cellPx,
+              width: cellPx + 0.5, // Sub-pixel bleed to ensure no white lines
+              height: cellPx + 0.5,
               overflow: 'hidden',
             }}
           >
-            {/* Image scaled up so rotation never shows background */}
             <img
               src={uploadedImage}
               alt=""
               draggable={false}
               style={{
                 position: 'absolute',
-                width: '140%',
-                height: '140%',
-                top: '-20%',
-                left: '-20%',
+                width: '142%', // Pythagorean diagonal for perfect join
+                height: '142%',
+                top: '-21%',
+                left: '-21%',
                 objectFit: 'cover',
                 transform: `rotate(${rot}deg) skewX(${tileSkewX}deg) skewY(${tileSkewY}deg)`,
-                filter: filterStr,
-                transition: 'transform 0.04s linear, filter 0.04s linear',
+                filter: lightNorm ? `contrast(${1 + lightStrength / 180}) brightness(${1 - lightStrength / 350})` : 'none',
               }}
             />
             {edgeBlend > 0 && (
               <div style={{
                 position: 'absolute', inset: 0, pointerEvents: 'none',
-                boxShadow: `inset 0 0 ${cellPx * edgeBlend * 1.2}px rgba(0,0,0,${Math.min(edgeBlend * 1.5, 0.8)})`,
-              }} />
-            )}
-            {seamBlend > 0 && (
-              <div style={{
-                position: 'absolute', inset: 0, pointerEvents: 'none',
-                background: `radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,${seamBlend * 0.55}) 100%)`,
+                boxShadow: `inset 0 0 ${cellPx * edgeBlend}px rgba(0,0,0,${edgeBlend * 2})`,
               }} />
             )}
           </div>
@@ -323,15 +277,7 @@ export default function ImageToPBR() {
     }
 
     return (
-      <div style={{
-        position: 'relative',
-        width: size,
-        height: size,
-        overflow: 'hidden',
-        borderRadius: 14,
-        boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
-        flexShrink: 0,
-      }}>
+      <div style={{ position: 'relative', width: size, height: size, overflow: 'hidden', borderRadius: 14, boxShadow: '0 25px 60px rgba(0,0,0,0.6)' }}>
         {tiles}
       </div>
     );
@@ -340,26 +286,22 @@ export default function ImageToPBR() {
   const handleGenerate = async () => {
     if (!uploadedImage || !user) { alert('Please upload an image and log in first'); return; }
     setIsGenerating(true);
-
     const composited = await compositeToCanvas(uploadedImage, {
       tileCount, tileRotation, tileSkewX, tileSkewY, edgeBlend, seamBlend,
       lightNorm, lightStrength, lightAngle,
     });
     const generatedMaps = { original: composited };
-
     try {
       if (selectedMaps.normal) {
         setGenerationProgress('Generating normal map...');
         const res = await fetch('/api/generate-image-to-pbr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: composited, userId: user.uid, userEmail: user.email, step: 'normal', resolution, seamless: pbSeamless }) });
         const data = await res.json();
-        if (data.error) throw new Error(data.error);
         if (data.status === 'succeeded') generatedMaps.normal = data.output;
       }
       if (selectedMaps.height) {
         setGenerationProgress('Generating height map...');
         const res = await fetch('/api/generate-image-to-pbr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: composited, step: 'height', resolution, seamless: pbSeamless }) });
         const data = await res.json();
-        if (data.error) throw new Error(data.error);
         if (data.status === 'succeeded') generatedMaps.height = data.output;
       }
       if (selectedMaps.roughness) {
@@ -374,7 +316,6 @@ export default function ImageToPBR() {
         const data = await res.json();
         if (data.output) generatedMaps.ao = data.output;
       }
-
       setResultMaps(generatedMaps);
       const { deductCredits } = await import('@/lib/credits');
       const { saveGeneration } = await import('@/lib/generations');
@@ -417,8 +358,6 @@ export default function ImageToPBR() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-white font-sans overflow-hidden relative">
-
-      {/* MAIN VIEW */}
       <div className="fixed inset-0 z-0 bg-[#0a0a0a]">
         {resultMaps.normal && showPreview ? (
           <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
@@ -455,10 +394,7 @@ export default function ImageToPBR() {
           <div className="w-full h-full flex items-center justify-center group">
             <div className="relative">
               {renderTileGrid()}
-              <button
-                onClick={handleRemoveImage}
-                className="absolute top-3 right-3 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xl border border-white/10"
-              >
+              <button onClick={handleRemoveImage} className="absolute top-3 right-3 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xl border border-white/10">
                 <X size={16} />
               </button>
             </div>
@@ -479,77 +415,49 @@ export default function ImageToPBR() {
         )}
       </div>
 
-      {/* BACK */}
       <nav className="p-4 sm:p-6 fixed top-0 left-0 w-full z-50 pointer-events-none">
         <button onClick={() => router.push('/tools')} className="pointer-events-auto flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all backdrop-blur-md">
           <ArrowLeft size={18} /><span className="text-sm font-medium">Back to Tools</span>
         </button>
       </nav>
 
-      {/* SETTINGS PANEL */}
       {uploadedImage && !resultMaps.normal && (
         <aside className="fixed top-4 sm:top-6 right-4 sm:right-6 z-50 w-72 sm:w-80 bg-[#0f0f0f]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-
-          {/* Tabs */}
           <div className="grid grid-cols-4 gap-0.5 bg-white/5 p-1 m-3 rounded-xl">
             {TABS.map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`py-1.5 text-[10px] font-bold rounded-lg transition-all ${activeTab === tab ? 'bg-white text-black' : 'text-white/40 hover:text-white/70'}`}
-              >
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`py-1.5 text-[10px] font-bold rounded-lg transition-all ${activeTab === tab ? 'bg-white text-black' : 'text-white/40 hover:text-white/70'}`}>
                 {tab}
               </button>
             ))}
           </div>
-
           <div className="overflow-y-auto flex-1 px-4 pb-5" style={{ scrollbarWidth: 'none' }}>
-
-            {/* GRID TAB */}
             {activeTab === 'Grid' && (
               <div>
-                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">
-                  Repeat your texture in a grid. Use edge and seam controls to hide where tiles meet.
-                </p>
-                <Slider label="Repeat Count" value={tileCount} min={1} max={6} unit={tileCount === 1 ? ' (off)' : `×${tileCount}`} onChange={setTileCount} />
+                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">Repeat count will subdivide the sheet into flush sections.</p>
+                <Slider label="Subdivisions" value={tileCount} min={1} max={6} unit={tileCount === 1 ? ' (off)' : `×${tileCount}`} onChange={setTileCount} />
                 <Slider label="Edge Softness" value={edgeBlend} min={0} max={0.4} step={0.01} unit="" onChange={setEdgeBlend} disabled={tileCount === 1} />
                 <Slider label="Seam Dissolve" value={seamBlend} min={0} max={1} step={0.01} unit="" onChange={setSeamBlend} disabled={tileCount === 1} />
               </div>
             )}
-
-            {/* ANGLE TAB */}
             {activeTab === 'Angle' && (
               <div>
-                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">
-                  Each tile gets its own slight transform. Rotate or skew to break the repetition pattern and make the grid look natural.
-                </p>
+                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">Rotate or skew sections independently while keeping them joined.</p>
                 <Slider label="Tile Rotation" value={tileRotation} min={0} max={180} unit="°" onChange={setTileRotation} disabled={tileCount === 1} />
                 <Slider label="Horizontal Shear" value={tileSkewX} min={-30} max={30} unit="°" onChange={setTileSkewX} disabled={tileCount === 1} />
                 <Slider label="Vertical Shear" value={tileSkewY} min={-30} max={30} unit="°" onChange={setTileSkewY} disabled={tileCount === 1} />
-                {tileCount === 1 && (
-                  <p className="text-[10px] text-white/30 mt-2 italic">Set Repeat Count above 1 to enable per-tile transforms.</p>
-                )}
               </div>
             )}
-
-            {/* LIGHT TAB */}
             {activeTab === 'Light' && (
               <div>
-                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">
-                  Apply a smooth directional gradient across the whole sheet to simulate a single light source and remove uneven lighting from the source photo.
-                </p>
+                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">Apply a smooth directional gradient across the whole sheet.</p>
                 <Toggle label="Lighting Overlay" sub="Smooth directional shading" value={lightNorm} onChange={setLightNorm} />
                 <Slider label="Intensity" value={lightStrength} min={0} max={100} unit="%" onChange={setLightStrength} disabled={!lightNorm} />
                 <Slider label="Light Direction" value={lightAngle} min={0} max={360} unit="°" onChange={setLightAngle} disabled={!lightNorm} />
               </div>
             )}
-
-            {/* OUTPUT TAB */}
             {activeTab === 'Output' && (
               <div>
-                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">
-                  Choose which PBR maps to generate and at what resolution.
-                </p>
+                <p className="text-[10px] text-white/30 mb-4 leading-relaxed">Choose PBR maps and resolution.</p>
                 <p className="text-[10px] text-white/40 uppercase tracking-wider font-bold mb-2">Maps</p>
                 <div className="space-y-2 mb-5">
                   {Object.entries({ normal: 'Normal', height: 'Height', roughness: 'Roughness', ao: 'Ambient Occlusion' }).map(([key, label]) => (
@@ -569,7 +477,7 @@ export default function ImageToPBR() {
                     </button>
                   ))}
                 </div>
-                <Toggle label="Tileable Output" sub="Forces seamless edges (+1 credit)" value={pbSeamless} onChange={setPbSeamless} />
+                <Toggle label="Tileable Output" sub="Forces seamless edges" value={pbSeamless} onChange={setPbSeamless} />
                 <div className="flex items-center justify-between pt-3 border-t border-white/10 mt-2">
                   <span className="text-sm text-white/50 font-bold">Total</span>
                   <span className="text-2xl font-black">{calculateCredits()} Credits</span>
