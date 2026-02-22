@@ -100,12 +100,14 @@ function compositeToCanvas(imageSrc, settings) {
         }
       }
 
-      // Seam blend — overlay alternating offset copy to dissolve seams
+      // Seam blend — copy to temp first, can't draw canvas onto itself
       if (seamBlend > 0 && tileCount > 1) {
-        ctx.globalAlpha = seamBlend * 0.5;
-        // draw offset copy halfway
+        const tmp = document.createElement('canvas');
+        tmp.width = total; tmp.height = total;
+        tmp.getContext('2d').drawImage(canvas, 0, 0);
         const half = tileSize / 2;
-        ctx.drawImage(canvas, half, half, total - half, total - half, 0, 0, total - half, total - half);
+        ctx.globalAlpha = seamBlend * 0.45;
+        ctx.drawImage(tmp, half, half, total - half, total - half, 0, 0, total - half, total - half);
         ctx.globalAlpha = 1;
       }
 
@@ -447,13 +449,14 @@ export default function ImageToPBR() {
           </div>
         ) : uploadedImage ? (
           <div className="w-full h-full flex items-center justify-center group">
-            <div className="relative" onClick={(e) => { if (e.target === e.currentTarget) handleRemoveImage(); }}>
+            <div className="relative">
               {renderTileGrid()}
-              {tileCount <= 1 && (
-                <button onClick={handleRemoveImage} className="absolute top-3 right-3 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xl border border-white/10">
-                  <X size={16} />
-                </button>
-              )}
+              <button
+                onClick={handleRemoveImage}
+                className="absolute top-3 right-3 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xl border border-white/10"
+              >
+                <X size={16} />
+              </button>
             </div>
           </div>
         ) : (
