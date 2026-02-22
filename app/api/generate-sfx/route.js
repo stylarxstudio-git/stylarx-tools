@@ -1,34 +1,35 @@
 import { NextResponse } from 'next/server';
-import Replicate from 'replicate';
+import { fal } from '@fal-ai/client';
+
+fal.config({
+  credentials: process.env.FAL_KEY,
+});
+
+const durationMap = {
+  quick: 8,
+  auto: 10,
+  full: 15,
+};
 
 export async function POST(req) {
   try {
-    const { prompt, userId, userEmail, duration, predictionId } = await req.json();
+    const { prompt, userId, userEmail, duration, format } = await req.json();
 
-    const replicate = new Replicate({
-      auth: process.env.REPLICATE_API_TOKEN,
-    });
-
-    if (predictionId) {
-      const prediction = await replicate.predictions.get(predictionId);
-      return NextResponse.json(prediction);
-    }
-
-    const durationMap = {
-      quick: 8,
-      auto: 10,
-      full: 15
-    };
-
-    const prediction = await replicate.predictions.create({
-      version: "80e6ba42c43c8c03e4b29f8f0f5cdb45ff9de18a1ffff1af27913a9dcdadb21b",
+    const result = await fal.subscribe('fal-ai/elevenlabs/sound-effects/v2', {
       input: {
-        prompt: prompt,
-        duration: durationMap[duration] || 10,
+        text: prompt,
+        duration_seconds: durationMap[duration] || 10,
       },
     });
 
-    return NextResponse.json(prediction);
+    const audioUrl = result?.audio?.url || result?.data?.audio?.url || result?.audio_url;
+
+    if (!audioUrl) throw new Error('No audio returned from fal');
+
+    return NextResponse.json({
+      audioUrl: audioUrl,
+    });
+
   } catch (error) {
     console.error('SFX generation error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
