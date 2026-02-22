@@ -259,16 +259,14 @@ export default function ImageToPBR() {
     const size = 560;
     const cellPx = size / count;
 
-    // Calculate the minimum scale needed so a rotated square ALWAYS fills its cell
-    // with zero gaps. For a square rotated by angle θ, the bounding box is:
-    // width = cos(θ) + sin(θ), so scale = 1 / min(cos(θ)+sin(θ)) over [0°,180°]
-    // The worst case is 45° where scale = √2 ≈ 1.414. We add 5% extra safety margin.
-    const maxRotRad = (tileRotation * Math.PI) / 180;
-    // worst-case angle within [0, maxRot] for bounding box
-    const worstAngle = Math.min(maxRotRad, Math.PI / 4); // 45deg is always worst
-    const minScale = (Math.abs(Math.cos(worstAngle)) + Math.abs(Math.sin(worstAngle))) * 1.05;
-    const scalePct = Math.max(100, minScale * 100);
-    const offset = -(scalePct - 100) / 2;
+    // To guarantee ZERO gaps when rotating: we render the image MUCH larger than
+    // the cell (200% minimum) centered on the cell's center point, then clip to the cell.
+    // The image center stays fixed, the large image rotates around it — corners can
+    // never reach the cell edge because the image is always twice the cell size.
+    // √2 * cellPx covers the diagonal at any angle, 200% is always safe.
+    const oversize = 2.0; // 200% — completely gap-proof at any rotation angle
+    const imgPx = cellPx * oversize;
+    const imgOffset = -(imgPx - cellPx) / 2; // centers the oversized image in the cell
 
     const filterStr = lightNorm
       ? `contrast(${1 + lightStrength / 180}) brightness(${1 - lightStrength / 350})`
@@ -280,7 +278,9 @@ export default function ImageToPBR() {
 
     for (let r = 0; r < count; r++) {
       for (let c = 0; c < count; c++) {
+        // Each tile gets a random rotation within the user's range
         const rot = (rand() * 2 - 1) * tileRotation;
+
         tiles.push(
           <div
             key={`${r}-${c}`}
@@ -290,27 +290,39 @@ export default function ImageToPBR() {
               top: r * cellPx,
               width: cellPx,
               height: cellPx,
+              // clip — never let anything escape the cell boundary
               overflow: 'hidden',
-              // No margin/border/padding — these cells are always perfectly flush
+              // These MUST be 0 — any margin/padding/border creates a gap
+              margin: 0,
+              padding: 0,
+              border: 'none',
+              outline: 'none',
+              boxSizing: 'border-box',
             }}
           >
+            {/* 
+              The image is 200% the size of the cell, centered perfectly.
+              When it rotates around its own center, it ALWAYS covers the full cell.
+              The parent clip (overflow:hidden) cuts it to exactly the cell boundary.
+              Result: zero gaps, zero black corners, at any rotation angle.
+            */}
             <img
               src={uploadedImage}
               alt=""
               draggable={false}
               style={{
                 position: 'absolute',
-                // Scale is mathematically guaranteed to fill the cell at any rotation
-                width: `${scalePct}%`,
-                height: `${scalePct}%`,
-                top: `${offset}%`,
-                left: `${offset}%`,
+                width: imgPx,
+                height: imgPx,
+                top: imgOffset,
+                left: imgOffset,
                 objectFit: 'cover',
-                // Rotation applied at the center of the oversized image
-                transform: `rotate(${rot}deg) skewX(${tileSkewX}deg) skewY(${tileSkewY}deg)`,
                 transformOrigin: 'center center',
+                transform: `rotate(${rot}deg) skewX(${tileSkewX}deg) skewY(${tileSkewY}deg)`,
                 filter: filterStr,
                 transition: 'transform 0.03s linear, filter 0.03s linear',
+                display: 'block',
+                flexShrink: 0,
               }}
             />
             {edgeBlend > 0 && (
@@ -339,6 +351,9 @@ export default function ImageToPBR() {
         borderRadius: 14,
         boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
         flexShrink: 0,
+        // No gap properties anywhere on this element
+        margin: 0,
+        padding: 0,
       }}>
         {tiles}
       </div>
