@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { fal } from '@fal-ai/client';
 
+fal.config({
+  credentials: process.env.FAL_KEY,
+});
+
 export async function POST(req) {
   try {
     const { image, prompt, aspectRatio } = await req.json();
@@ -12,9 +16,6 @@ export async function POST(req) {
         strength: 0.8,
         num_inference_steps: 50,
         guidance_scale: 7.5,
-      },
-      headers: {
-        'Authorization': `Key ${process.env.FAL_KEY}`,
       },
     });
 
