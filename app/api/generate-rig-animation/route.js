@@ -1,43 +1,59 @@
 import { NextResponse } from 'next/server';
-import { fal } from '@fal-ai/client';
-
-fal.config({
-  credentials: process.env.FAL_KEY,
-});
-
-export const maxDuration = 300;
+import { fal } from "@fal-ai/client";
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { prompt } = body;
+    const { prompt, duration, format, seed, predictionId } = body;
 
-    if (!prompt?.trim()) {
-      return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
+    // Use FAL_KEY from your .env.local
+    if (!process.env.FAL_KEY) {
+      return NextResponse.json(
+        { error: 'Fal API key not configured. Add FAL_KEY to .env.local' },
+        { status: 500 }
+      );
     }
 
-    // fal.subscribe waits until complete — no polling needed
-    // Returns: { fbx_file: { url: string }, seed: number }
-    const result = await fal.subscribe('fal-ai/hunyuan-motion', {
-      input: { prompt: prompt.trim() },
-      logs: true,
+    // 1. Check Status if predictionId is provided
+    if (predictionId) {
+      const status = await fal.queue.status("fal-ai/hunyuan-motion/fast", { 
+        requestId: predictionId 
+      });
+      
+      // If finished, get the result
+      if (status.status === "COMPLETED") {
+        const result = await fal.queue.result("fal-ai/hunyuan-motion/fast", { 
+          requestId: predictionId 
+        });
+        return NextResponse.json({
+          status: 'completed',
+          animationUrl: result.fbx_file?.url, // Hunyuan Motion returns fbx_file object
+        });
+      }
+      
+      return NextResponse.json({ status: status.status.toLowerCase() });
+    }
+
+    // 2. Start new generation
+    // Hunyuan Motion specific parameters
+    const { request_id } = await fal.queue.submit("fal-ai/hunyuan-motion/fast", {
+      input: {
+        prompt: prompt,
+        duration: duration || 5, // Default 5s
+        output_format: format.toLowerCase(), // 'fbx' or 'dict'
+        seed: seed || Math.floor(Math.random() * 1000000),
+      },
     });
 
-    const fbxUrl =
-      result?.fbx_file?.url ||
-      result?.data?.fbx_file?.url;
-
-    if (!fbxUrl) {
-      console.error('Full result:', JSON.stringify(result, null, 2));
-      throw new Error('No FBX file returned');
-    }
-
-    return NextResponse.json({ status: 'succeeded', animationUrl: fbxUrl });
+    return NextResponse.json({
+      predictionId: request_id,
+      status: 'starting',
+    });
 
   } catch (error) {
-    console.error('Animation error:', error);
+    console.error('Fal Animation Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to generate animation' },
+      { error: error.message || 'Failed to generate motion' },
       { status: 500 }
     );
   }

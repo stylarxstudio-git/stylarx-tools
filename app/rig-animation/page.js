@@ -151,59 +151,32 @@ export default function RigAnimation() {
     startTimer();
 
     try {
-      // Step 1: Submit job to queue — returns immediately with requestId
-      const submitRes = await fetch('/api/generate-rig-animation', {
+      const response = await fetch('/api/generate-rig-animation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: prompt.trim(), userId: user.uid, userEmail: user.email }),
       });
-      const submitData = await submitRes.json();
-      if (submitData.error) throw new Error(submitData.error);
 
-      const { requestId } = submitData;
-      if (!requestId) throw new Error('No request ID returned');
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
 
-      // Step 2: Poll every 4 seconds until completed
-      let animUrl = null;
-      let attempts = 0;
-      const maxAttempts = 60; // 60 x 4s = 4 minutes max
+      if (data.status === 'succeeded' && data.animationUrl) {
+        setAnimationUrl(data.animationUrl);
+        setIsPlaying(true);
 
-      while (attempts < maxAttempts) {
-        await new Promise(r => setTimeout(r, 4000));
-        attempts++;
-
-        const pollRes = await fetch('/api/generate-rig-animation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ requestId }),
+        const { deductCredits } = await import('@/lib/credits');
+        const { saveGeneration } = await import('@/lib/generations');
+        await deductCredits(user.uid, 2);
+        await saveGeneration({
+          outsetaUid: user.uid,
+          toolName: 'AI Rig Animation',
+          prompt,
+          imageUrl: data.animationUrl,
+          creditsUsed: 2,
         });
-        const pollData = await pollRes.json();
-
-        if (pollData.error) throw new Error(pollData.error);
-
-        if (pollData.status === 'succeeded' && pollData.animationUrl) {
-          animUrl = pollData.animationUrl;
-          break;
-        }
-        // status === 'pending' → keep polling
+      } else {
+        throw new Error('Generation failed — no animation returned');
       }
-
-      if (!animUrl) throw new Error('Generation timed out — please try again');
-
-      setAnimationUrl(animUrl);
-      setIsPlaying(true);
-
-      const { deductCredits } = await import('@/lib/credits');
-      const { saveGeneration } = await import('@/lib/generations');
-      await deductCredits(user.uid, 2);
-      await saveGeneration({
-        outsetaUid: user.uid,
-        toolName: 'AI Rig Animation',
-        prompt,
-        imageUrl: animUrl,
-        creditsUsed: 2,
-      });
-
     } catch (err) {
       alert(err.message || 'Error generating animation');
     } finally {
@@ -211,6 +184,7 @@ export default function RigAnimation() {
       setIsGenerating(false);
     }
   };
+;
 
   const handleDownload = async () => {
     if (!animationUrl) return;
