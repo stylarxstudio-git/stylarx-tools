@@ -1,9 +1,9 @@
 'use client';
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Stage, useGLTF, useFBX, Center } from '@react-three/drei';
-import { ArrowLeft, Wand2, Sparkles, Upload, Box, Image as ImageIcon, Cpu, X, Download, AlertCircle, Monitor, Smartphone, Square } from 'lucide-react';
+import { ArrowLeft, Sparkles, Upload, Box, Image as ImageIcon, Cpu, X, Download, AlertCircle, Monitor, Smartphone, Square } from 'lucide-react';
 import { useUser } from '@/hooks/useUser';
 
 function Model({ url, isFbx }) {
@@ -15,6 +15,11 @@ function Model({ url, isFbx }) {
 export default function SceneStager() {
   const router = useRouter();
   const { user, loading } = useUser();
+
+  // mounted guard — Canvas must never run server-side
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [file, setFile] = useState(null);
@@ -42,16 +47,11 @@ export default function SceneStager() {
     setPrompt(presets[Math.floor(Math.random() * presets.length)]);
   };
 
-  // HELPER: Capture the 3D viewport as an image for the AI
   const captureCanvas = () => {
     const canvas = document.querySelector('canvas');
-    if (canvas) {
-      return canvas.toDataURL('image/png');
-    }
-    return null;
+    return canvas ? canvas.toDataURL('image/png') : null;
   };
 
-  // HELPER: Convert blob URL to base64 for photo mode
   const blobToBase64 = async (blobUrl) => {
     const response = await fetch(blobUrl);
     const blob = await response.blob();
@@ -62,7 +62,6 @@ export default function SceneStager() {
     });
   };
 
-  // HELPER: Download result image
   const handleDownload = async () => {
     try {
       const response = await fetch(resultImage);
@@ -76,47 +75,33 @@ export default function SceneStager() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Download error:', err);
       window.open(resultImage, '_blank');
     }
   };
 
-  // MAIN GENERATION ENGINE
   const handleGenerate = async () => {
     if (!prompt || !file) return;
     setIsGenerating(true);
-
     try {
       let inputImage;
-
       if (activeMode === '3d') {
-        inputImage = captureCanvas(); // already base64
+        inputImage = captureCanvas();
       } else {
-        inputImage = await blobToBase64(file); // convert blob to base64
+        inputImage = await blobToBase64(file);
       }
-
       const response = await fetch('/api/generate-scene', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: inputImage,
-          prompt: prompt,
-          aspectRatio: aspectRatio,
-        }),
+        body: JSON.stringify({ image: inputImage, prompt, aspectRatio }),
       });
-
       const result = await response.json();
-
       if (result.error) throw new Error(result.error);
-
       if (result.status === 'succeeded') {
         setResultImage(result.output[0]);
       } else {
-        throw new Error('AI generation failed. Please try a different prompt.');
+        throw new Error('Generation failed. Please try a different prompt.');
       }
-
     } catch (err) {
-      console.error('Generation Error:', err);
       alert(err.message || 'An error occurred during generation.');
     } finally {
       setIsGenerating(false);
@@ -136,16 +121,15 @@ export default function SceneStager() {
           <ArrowLeft size={18} />
           <span className="hidden sm:inline text-sm font-medium">Back to Tools</span>
         </button>
-
         <div className="flex bg-[#1a1a1a] p-1 rounded-full border border-white/10 backdrop-blur-md shadow-2xl">
-          <button onClick={() => { setActiveMode('3d'); setFile(null); setResultImage(null); }} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeMode === '3d' ? 'bg-white text-black' : 'text-white/40 hover:text'}`}>
+          <button onClick={() => { setActiveMode('3d'); setFile(null); setResultImage(null); }} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeMode === '3d' ? 'bg-white text-black' : 'text-white/40'}`}>
             <Box size={14} /> 3D Model
           </button>
-          <button onClick={() => { setActiveMode('photo'); setFile(null); setResultImage(null); }} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeMode === 'photo' ? 'bg-white text-black' : 'text-white/40 hover:text'}`}>
+          <button onClick={() => { setActiveMode('photo'); setFile(null); setResultImage(null); }} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeMode === 'photo' ? 'bg-white text-black' : 'text-white/40'}`}>
             <ImageIcon size={14} /> Photo Basis
           </button>
         </div>
-        <div className="w-[80px] sm:w-[120px]"></div>
+        <div className="w-[80px] sm:w-[120px]" />
       </nav>
 
       <main className="flex-1 flex flex-col items-center justify-center p-4 pt-24 pb-32">
@@ -164,7 +148,8 @@ export default function SceneStager() {
           </div>
         ) : (
           <div className={`relative w-full transition-all duration-500 bg-neutral-900/30 rounded-3xl overflow-hidden border border-white/5 shadow-2xl ${getAspectClass()}`}>
-            {activeMode === '3d' && !resultImage && (
+            {/* Canvas only renders after mount — never on server */}
+            {activeMode === '3d' && !resultImage && mounted && (
               <Canvas shadows camera={{ position: [0, 0, 5], fov: 45 }} gl={{ preserveDrawingBuffer: true }}>
                 <Suspense fallback={null}>
                   <Stage environment="city" intensity={0.5}>
@@ -174,22 +159,15 @@ export default function SceneStager() {
                 <OrbitControls makeDefault />
               </Canvas>
             )}
-
             {(activeMode === 'photo' || resultImage) && (
               <img src={resultImage || file} alt="Preview" className="w-full h-full object-contain p-4 sm:p-12" />
             )}
-
             {resultImage && (
               <div className="absolute top-4 right-4 flex gap-2 z-50">
-                <button onClick={() => setResultImage(null)} className="p-2 bg-black/60 hover:bg-black rounded-full border border-white/10 transition-all text-white">
-                  <X size={20} />
-                </button>
-                <button onClick={handleDownload} className="p-2 bg-white text-black rounded-full hover:scale-110 transition-transform flex items-center justify-center">
-                  <Download size={20} />
-                </button>
+                <button onClick={() => setResultImage(null)} className="p-2 bg-black/60 hover:bg-black rounded-full border border-white/10 transition-all text-white"><X size={20} /></button>
+                <button onClick={handleDownload} className="p-2 bg-white text-black rounded-full hover:scale-110 transition-transform"><Download size={20} /></button>
               </div>
             )}
-            
             {!resultImage && (
               <button onClick={() => setFile(null)} className="absolute top-4 right-4 px-3 py-1.5 bg-black/50 hover:bg-red-500/20 text-white/60 hover:text-red-400 text-[10px] font-bold uppercase rounded-lg border border-white/10 transition-all">
                 Remove
@@ -204,19 +182,15 @@ export default function SceneStager() {
           <div className="flex flex-wrap items-center justify-center gap-4">
             <div className="flex bg-[#1a1a1a]/80 backdrop-blur-md p-1 rounded-xl border border-white/10">
               <button onClick={() => setAspectRatio('landscape')} className={`p-2 rounded-lg transition-all flex items-center gap-2 ${aspectRatio === 'landscape' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>
-                <Monitor size={16} />
-                <span className="text-[10px] font-bold uppercase">16:9</span>
+                <Monitor size={16} /><span className="text-[10px] font-bold uppercase">16:9</span>
               </button>
               <button onClick={() => setAspectRatio('square')} className={`p-2 rounded-lg transition-all flex items-center gap-2 ${aspectRatio === 'square' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>
-                <Square size={14} />
-                <span className="text-[10px] font-bold uppercase">1:1</span>
+                <Square size={14} /><span className="text-[10px] font-bold uppercase">1:1</span>
               </button>
               <button onClick={() => setAspectRatio('portrait')} className={`p-2 rounded-lg transition-all flex items-center gap-2 ${aspectRatio === 'portrait' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>
-                <Smartphone size={16} />
-                <span className="text-[10px] font-bold uppercase">9:16</span>
+                <Smartphone size={16} /><span className="text-[10px] font-bold uppercase">9:16</span>
               </button>
             </div>
-
             {file && prompt && !isGenerating && !resultImage && (
               <div className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full">
                 <AlertCircle size={14} className="text-blue-400" />
@@ -224,29 +198,21 @@ export default function SceneStager() {
               </div>
             )}
           </div>
-
           <div className="w-full flex items-center gap-2 sm:gap-3 bg-[#1a1a1a] p-1.5 sm:p-2 rounded-2xl border border-white/10 shadow-2xl">
-            <input 
-              type="text" 
-              value={prompt} 
-              onChange={(e) => setPrompt(e.target.value)} 
-              disabled={isGenerating}
-              placeholder="Describe environment..." 
+            <input
+              type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)}
+              disabled={isGenerating} placeholder="Describe environment..."
               className="flex-1 bg-transparent px-3 py-2 sm:px-4 sm:py-3 outline-none text-white text-[16px] sm:text-base placeholder-neutral-500 min-w-0"
               onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
             />
-            
             <button onClick={handleAutoPrompt} disabled={isGenerating} className="hidden md:flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-white/60 border border-white/10 transition-all">
-              <Cpu size={16} />
-              <span className="text-xs font-bold uppercase tracking-tighter">AI Suggest</span>
+              <Cpu size={16} /><span className="text-xs font-bold uppercase tracking-tighter">AI Suggest</span>
             </button>
-
             <button onClick={handleGenerate} disabled={isGenerating || !file || loading} className="bg-white text-black px-4 py-2 sm:px-6 sm:py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-neutral-200 disabled:opacity-50 transition-all h-10 sm:h-12 shadow-xl">
-              {isGenerating ? (
-                <div className="h-5 w-5 border-2 border-black border-t-transparent animate-spin rounded-full" />
-              ) : (
-                <><Sparkles size={18} /><span className="hidden xs:inline">Stage Scene</span></>
-              )}
+              {isGenerating
+                ? <div className="h-5 w-5 border-2 border-black border-t-transparent animate-spin rounded-full" />
+                : <><Sparkles size={18} /><span className="hidden xs:inline">Stage Scene</span></>
+              }
             </button>
           </div>
         </div>
