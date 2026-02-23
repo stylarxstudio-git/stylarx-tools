@@ -102,7 +102,7 @@ export default function ToolsPage() {
       name: 'AI Rig Animation', 
       description: 'Generate skeletal animations from text prompts.', 
       credits: 2, 
-      thumbnail: '/Rig-Animation-Thumbnail.jpg',
+      thumbnail: '/RigAnimationThumbnail.png',
       path: '/rig-animation',
       themeColor: '#FF00FF' 
     }
