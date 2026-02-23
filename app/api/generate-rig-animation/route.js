@@ -5,6 +5,8 @@ fal.config({
   credentials: process.env.FAL_KEY,
 });
 
+export const maxDuration = 300;
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -14,7 +16,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    // fal-ai/hunyuan-motion: only accepts { prompt }
+    // fal.subscribe waits until complete — no polling needed
     // Returns: { fbx_file: { url: string }, seed: number }
     const result = await fal.subscribe('fal-ai/hunyuan-motion', {
       input: { prompt: prompt.trim() },
@@ -26,7 +28,7 @@ export async function POST(request) {
       result?.data?.fbx_file?.url;
 
     if (!fbxUrl) {
-      console.error('hunyuan-motion full result:', JSON.stringify(result, null, 2));
+      console.error('Full result:', JSON.stringify(result, null, 2));
       throw new Error('No FBX file returned');
     }
 
