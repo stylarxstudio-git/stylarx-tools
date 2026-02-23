@@ -8,38 +8,32 @@ fal.config({
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { prompt, userId, userEmail } = body;
+    const { prompt } = body;
 
     if (!prompt?.trim()) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    // fal-ai/hunyuan-motion: text prompt → FBX motion file
-    // Output: { fbx_file: { url: string }, seed: number }
+    // fal-ai/hunyuan-motion: only accepts { prompt }
+    // Returns: { fbx_file: { url: string }, seed: number }
     const result = await fal.subscribe('fal-ai/hunyuan-motion', {
-      input: {
-        prompt: prompt.trim(),
-      },
+      input: { prompt: prompt.trim() },
       logs: true,
     });
 
     const fbxUrl =
       result?.fbx_file?.url ||
-      result?.data?.fbx_file?.url ||
-      result?.output?.fbx_file?.url;
+      result?.data?.fbx_file?.url;
 
     if (!fbxUrl) {
-      console.error('Hunyuan motion full result:', JSON.stringify(result, null, 2));
-      throw new Error('No FBX file returned from model');
+      console.error('hunyuan-motion full result:', JSON.stringify(result, null, 2));
+      throw new Error('No FBX file returned');
     }
 
-    return NextResponse.json({
-      status: 'succeeded',
-      animationUrl: fbxUrl,
-    });
+    return NextResponse.json({ status: 'succeeded', animationUrl: fbxUrl });
 
   } catch (error) {
-    console.error('Animation API Error:', error);
+    console.error('Animation error:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to generate animation' },
       { status: 500 }

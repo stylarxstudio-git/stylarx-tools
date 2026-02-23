@@ -8,95 +8,123 @@ import { useUser } from '@/hooks/useUser';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
 import * as THREE from 'three';
 
-// Loads the static mannequin from public folder
-function StaticMannequin() {
-  const fbx = useLoader(FBXLoader, '/Mannequin.fbx');
-  useEffect(() => {
-    fbx.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-  }, [fbx]);
-  return <primitive object={fbx} scale={0.015} position={[0, -1.5, 0]} />;
-}
-
-// Loads the generated FBX from hunyuan-motion and plays its animation
+// Loads the generated FBX and plays its embedded animation
 function AnimatedModel({ url, playing }) {
   const fbx = useLoader(FBXLoader, url);
-  const group = useRef();
-  const { actions, names } = useAnimations(fbx.animations, group);
-
-  useEffect(() => {
-    if (names.length > 0) {
-      const action = actions[names[0]];
-      if (action) {
-        action.reset();
-        action.setLoop(THREE.LoopRepeat, Infinity);
-        if (playing) {
-          action.play();
-        } else {
-          action.play();
-          action.paused = true;
-        }
-      }
-    }
-  }, [actions, names, playing]);
-
-  useEffect(() => {
-    if (names.length > 0) {
-      const action = actions[names[0]];
-      if (action) {
-        action.paused = !playing;
-      }
-    }
-  }, [playing]);
+  const groupRef = useRef();
+  const { actions, names } = useAnimations(fbx.animations, groupRef);
 
   useEffect(() => {
     fbx.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-        // Give it a visible material if none
         if (!child.material) {
-          child.material = new THREE.MeshStandardMaterial({ color: '#aaaaaa' });
+          child.material = new THREE.MeshStandardMaterial({ color: '#b0b0b0' });
         }
       }
     });
   }, [fbx]);
 
-  return <primitive ref={group} object={fbx} scale={0.015} position={[0, -1.5, 0]} />;
+  useEffect(() => {
+    if (!names.length) return;
+    const action = actions[names[0]];
+    if (!action) return;
+    action.reset();
+    action.setLoop(THREE.LoopRepeat, Infinity);
+    action.play();
+    action.paused = !playing;
+  }, [actions, names]);
+
+  useEffect(() => {
+    if (!names.length) return;
+    const action = actions[names[0]];
+    if (action) action.paused = !playing;
+  }, [playing]);
+
+  return <primitive ref={groupRef} object={fbx} scale={0.1} position={[0, -1.5, 0]} />;
+}
+
+
+
+// Animated progress bar with estimated countdown
+function GeneratingOverlay({ elapsed }) {
+  // Hunyuan motion takes ~60-90 seconds typically
+  const estimated = 75;
+  const pct = Math.min(98, (elapsed / estimated) * 100);
+  const remaining = Math.max(0, estimated - elapsed);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-3xl p-8 flex flex-col items-center gap-5 w-full max-w-sm mx-4">
+        {/* STYLARX brand — not "AI model" */}
+        <div className="text-center">
+          <p className="text-white font-black text-xl tracking-tight">STYLARX</p>
+          <p className="text-white/50 text-sm mt-1">Generating your animation...</p>
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-full">
+          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-white rounded-full transition-all duration-1000 ease-linear"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-white/30 mt-2">
+            <span>{Math.round(pct)}%</span>
+            <span>~{remaining}s remaining</span>
+          </div>
+        </div>
+
+        {/* Steps hint */}
+        <div className="text-center text-[11px] text-white/30 leading-relaxed">
+          Processing motion data • Rigging skeleton • Exporting FBX
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function RigAnimation() {
   const router = useRouter();
   const { user, loading } = useUser();
   const controlsRef = useRef();
+  const timerRef = useRef();
 
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [animationUrl, setAnimationUrl] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [duration, setDuration] = useState('auto');
-  const [quality, setQuality] = useState('high');
-  const [fps, setFps] = useState('30');
-  const [loopable, setLoopable] = useState(true);
+
+  // Settings — kept for UX, they don't change API but good for future
 
   const popularPrompts = [
-    'A person is running then takes a big leap',
+    'A person runs then leaps into the air',
     'A person waves hello enthusiastically',
     'A person does a victory dance',
     'A person walks forward confidently',
-    'A person jumps and celebrates',
-    'A person sits down slowly',
-    'A person punches forward in combat stance',
+    'A person throws a punch and kicks',
+    'A person sits down slowly then stands up',
     'A person climbs a ladder',
+    'A person crouches and sneaks forward',
   ];
 
   const resetCamera = () => {
     if (controlsRef.current) controlsRef.current.reset();
+  };
+
+  // Countdown timer
+  const startTimer = () => {
+    setElapsed(0);
+    timerRef.current = setInterval(() => {
+      setElapsed(prev => prev + 1);
+    }, 1000);
+  };
+  const stopTimer = () => {
+    clearInterval(timerRef.current);
   };
 
   const handleGenerate = async () => {
@@ -107,16 +135,13 @@ export default function RigAnimation() {
 
     setIsGenerating(true);
     setAnimationUrl(null);
+    startTimer();
 
     try {
       const response = await fetch('/api/generate-rig-animation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: prompt.trim(),
-          userId: user.uid,
-          userEmail: user.email,
-        }),
+        body: JSON.stringify({ prompt: prompt.trim(), userId: user.uid, userEmail: user.email }),
       });
 
       const data = await response.json();
@@ -137,11 +162,12 @@ export default function RigAnimation() {
           creditsUsed: 2,
         });
       } else {
-        throw new Error('Animation generation failed — no file returned');
+        throw new Error('Generation failed — no animation returned');
       }
     } catch (err) {
       alert(err.message || 'Error generating animation');
     } finally {
+      stopTimer();
       setIsGenerating(false);
     }
   };
@@ -150,8 +176,8 @@ export default function RigAnimation() {
     if (!animationUrl) return;
     setIsDownloading(true);
     try {
-      const response = await fetch(animationUrl);
-      const blob = await response.blob();
+      const r = await fetch(animationUrl);
+      const blob = await r.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -167,52 +193,51 @@ export default function RigAnimation() {
     }
   };
 
+
+
   return (
     <div className="flex flex-col min-h-screen bg-[#1a1a1a] text-white font-sans overflow-hidden relative">
 
       {/* 3D SCENE */}
       <div className="fixed inset-0 z-0 bg-gradient-to-b from-[#2a2a2a] to-[#1a1a1a]">
-        <Canvas
-          shadows
-          camera={{ position: [0, 1, 4], fov: 50 }}
-          gl={{ antialias: true }}
-        >
+        <Canvas shadows camera={{ position: [0, 1, 4], fov: 50 }} gl={{ antialias: true }}>
           <Suspense fallback={null}>
             <ambientLight intensity={1.5} />
             <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow shadow-mapSize={[2048, 2048]} />
             <directionalLight position={[-10, 10, -5]} intensity={0.8} />
             <pointLight position={[0, 5, 0]} intensity={0.8} />
 
-            {animationUrl ? (
+            {animationUrl && (
               <AnimatedModel url={animationUrl} playing={isPlaying} />
-            ) : (
-              <StaticMannequin />
             )}
 
             <OrbitControls
               ref={controlsRef}
-              enableZoom={true}
-              enablePan={true}
-              minDistance={1}
-              maxDistance={15}
+              enableZoom enablePan
+              minDistance={1} maxDistance={15}
               target={[0, 0, 0]}
               makeDefault
             />
             <gridHelper args={[20, 20, '#555555', '#333333']} position={[0, -1.5, 0]} />
           </Suspense>
         </Canvas>
+
+        {/* Empty state hint */}
+        {!animationUrl && !isGenerating && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-center">
+              <div className="w-20 h-20 rounded-full bg-white/5 border-2 border-dashed border-white/10 flex items-center justify-center mx-auto mb-4">
+                <Sparkles size={28} className="text-white/20" />
+              </div>
+              <p className="text-white/30 text-base font-medium">Enter a prompt below</p>
+              <p className="text-white/15 text-sm mt-1">Your animated character will appear here</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* LOADING OVERLAY */}
-      {isGenerating && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 flex flex-col items-center gap-4 max-w-sm mx-4">
-            <div className="h-12 w-12 border-3 border-white/30 border-t-white animate-spin rounded-full" style={{ borderWidth: 3 }} />
-            <p className="text-white font-bold text-lg text-center">Generating Motion...</p>
-            <p className="text-white/50 text-sm text-center">Hunyuan is creating your 3D animation. This takes ~60 seconds.</p>
-          </div>
-        </div>
-      )}
+      {/* GENERATING OVERLAY */}
+      {isGenerating && <GeneratingOverlay elapsed={elapsed} />}
 
       {/* NAV */}
       <nav className="p-4 sm:p-6 fixed top-0 left-0 w-full z-50 pointer-events-none flex justify-between items-start">
@@ -233,72 +258,34 @@ export default function RigAnimation() {
       </nav>
 
       {/* SETTINGS PANEL */}
-      <aside className="fixed top-20 sm:top-24 right-4 sm:right-6 z-50 w-72 sm:w-80 bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 sm:p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+      <aside className="fixed top-20 sm:top-24 right-4 sm:right-6 z-50 w-72 sm:w-80 bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 sm:p-5 space-y-4 max-h-[75vh] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
 
-        {/* Play/Pause — only visible when animation loaded */}
+        {/* Play/Pause when animation loaded */}
         {animationUrl && (
           <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <p className="text-sm font-bold text-white">Animation</p>
+            <p className="text-sm font-bold">Playback</p>
             <button
               onClick={() => setIsPlaying(!isPlaying)}
               className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl border border-white/10 text-sm font-bold transition-all"
             >
-              {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-              {isPlaying ? 'Pause' : 'Play'}
+              {isPlaying ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Play</>}
             </button>
           </div>
         )}
 
-        <div>
-          <label className="text-xs text-white/60 mb-2 block uppercase tracking-wider font-bold">Duration</label>
-          <div className="grid grid-cols-4 gap-2">
-            <button onClick={() => setDuration('auto')} className={`py-2 text-xs font-bold rounded-lg transition-all ${duration === 'auto' ? 'bg-white text-black' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}>Auto</button>
-            {['2', '5', '10'].map(d => (
-              <button key={d} onClick={() => setDuration(d)} className={`py-2 text-xs font-bold rounded-lg transition-all ${duration === d ? 'bg-white text-black' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}>{d}s</button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs text-white/60 mb-2 block uppercase tracking-wider font-bold">Quality</label>
-          <div className="grid grid-cols-3 gap-2">
-            {['standard', 'high', 'ultra'].map(q => (
-              <button key={q} onClick={() => setQuality(q)} className={`py-2 text-xs font-bold rounded-lg transition-all capitalize ${quality === q ? 'bg-white text-black' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}>{q}</button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs text-white/60 mb-2 block uppercase tracking-wider font-bold">Frame Rate</label>
-          <div className="grid grid-cols-3 gap-2">
-            {['24', '30', '60'].map(f => (
-              <button key={f} onClick={() => setFps(f)} className={`py-2 text-xs font-bold rounded-lg transition-all ${fps === f ? 'bg-white text-black' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}>{f}</button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-2 border-t border-white/10">
-          <div>
-            <p className="text-sm font-bold text-white">Seamless Loop</p>
-            <p className="text-xs text-white/40">Smooth transition</p>
-          </div>
-          <button onClick={() => setLoopable(!loopable)} className={`w-12 h-6 rounded-full transition-all relative ${loopable ? 'bg-white' : 'bg-white/20'}`}>
-            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform ${loopable ? 'translate-x-6 bg-black' : 'translate-x-0 bg-white/60'}`} />
-          </button>
-        </div>
-
-        {/* Format info — hunyuan only outputs FBX */}
+        {/* Export */}
         <div className="pt-2 border-t border-white/10">
-          <label className="text-xs text-white/60 mb-2 block uppercase tracking-wider font-bold">Export Format</label>
-          <div className="px-3 py-2 bg-white/5 rounded-lg border border-white/10 text-sm font-bold text-white/80">
-            FBX — Hunyuan Motion output
+          <label className="text-xs text-white/60 uppercase tracking-wider font-bold mb-2 block">Export Format</label>
+          <div className="px-3 py-2.5 bg-white/5 rounded-lg border border-white/10 text-sm font-bold text-white/80 flex items-center justify-between">
+            <span>FBX</span>
+            <span className="text-[10px] text-white/30 font-normal">Blender · Maya · Unreal · Unity</span>
           </div>
-          <p className="text-[10px] text-white/30 mt-1.5">Compatible with Blender, Maya, Unreal, Unity</p>
         </div>
 
+        {/* Cost */}
         <div className="pt-3 border-t border-white/10">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-white/70">Total Cost:</span>
+            <span className="text-sm font-bold text-white/70">Total Cost</span>
             <span className="text-2xl font-black">2 Credits</span>
           </div>
         </div>
@@ -310,7 +297,7 @@ export default function RigAnimation() {
 
           {!animationUrl && (
             <div>
-              <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block font-bold">Example Prompts</label>
+              <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block font-bold">Quick Prompts</label>
               <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
                 {popularPrompts.map((p, i) => (
                   <button
@@ -352,7 +339,7 @@ export default function RigAnimation() {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !isGenerating && handleGenerate()}
-                placeholder="Describe the animation... (e.g. A person runs and leaps)"
+                placeholder="Describe the animation... (e.g. A person runs then leaps)"
                 disabled={isGenerating}
                 className="flex-1 bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-base focus:outline-none focus:border-white/30 placeholder-white/30 disabled:opacity-50"
               />
