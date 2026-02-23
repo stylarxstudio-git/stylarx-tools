@@ -42,45 +42,58 @@ function AnimatedModel({ url, playing }) {
     if (action) action.paused = !playing;
   }, [playing]);
 
-  return <primitive ref={groupRef} object={fbx} scale={0.015} position={[0, -1.5, 0]} />;
+  return <primitive ref={groupRef} object={fbx} scale={0.1} position={[0, -1.5, 0]} />;
 }
 
 
 
-// Animated progress bar with estimated countdown
+// Animated progress bar — scales to actual time, never gets stuck
 function GeneratingOverlay({ elapsed }) {
-  // Hunyuan motion takes ~60-90 seconds typically
-  const estimated = 75;
-  const pct = Math.min(98, (elapsed / estimated) * 100);
-  const remaining = Math.max(0, estimated - elapsed);
+  // Real average is 2-3 min. Bar grows fast early, slows as it approaches 95%
+  // Uses a log curve so it always moves but never hits 100% until done
+  const pct = Math.min(95, 95 * (1 - Math.exp(-elapsed / 90)));
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+
+  const steps = [
+    'Analyzing prompt',
+    'Generating motion data',
+    'Rigging skeleton',
+    'Applying keyframes',
+    'Exporting FBX',
+  ];
+  // Cycle through steps based on elapsed time
+  const stepIndex = Math.min(steps.length - 1, Math.floor(elapsed / 25));
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="bg-white/[0.08] backdrop-blur-xl border border-white/10 rounded-3xl p-8 flex flex-col items-center gap-5 w-full max-w-sm mx-4">
-        {/* STYLARX brand — not "AI model" */}
         <div className="text-center">
           <p className="text-white font-black text-xl tracking-tight">STYLARX</p>
           <p className="text-white/50 text-sm mt-1">Generating your animation...</p>
         </div>
 
-        {/* Progress bar */}
         <div className="w-full">
           <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
             <div
-              className="h-full bg-white rounded-full transition-all duration-1000 ease-linear"
-              style={{ width: `${pct}%` }}
+              className="h-full bg-white rounded-full"
+              style={{ width: `${pct}%`, transition: 'width 1s ease-out' }}
             />
           </div>
           <div className="flex justify-between text-[10px] text-white/30 mt-2">
             <span>{Math.round(pct)}%</span>
-            <span>~{remaining}s remaining</span>
+            <span>{timeStr} elapsed</span>
           </div>
         </div>
 
-        {/* Steps hint */}
-        <div className="text-center text-[11px] text-white/30 leading-relaxed">
-          Processing motion data • Rigging skeleton • Exporting FBX
+        <div className="text-center text-[11px] text-white/40 leading-relaxed">
+          {steps[stepIndex]}...
         </div>
+
+        <p className="text-[10px] text-white/20 text-center">
+          This typically takes 2–3 minutes. Please keep this tab open.
+        </p>
       </div>
     </div>
   );
@@ -138,32 +151,59 @@ export default function RigAnimation() {
     startTimer();
 
     try {
-      const response = await fetch('/api/generate-rig-animation', {
+      // Step 1: Submit job to queue — returns immediately with requestId
+      const submitRes = await fetch('/api/generate-rig-animation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: prompt.trim(), userId: user.uid, userEmail: user.email }),
       });
+      const submitData = await submitRes.json();
+      if (submitData.error) throw new Error(submitData.error);
 
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
+      const { requestId } = submitData;
+      if (!requestId) throw new Error('No request ID returned');
 
-      if (data.status === 'succeeded' && data.animationUrl) {
-        setAnimationUrl(data.animationUrl);
-        setIsPlaying(true);
+      // Step 2: Poll every 4 seconds until completed
+      let animUrl = null;
+      let attempts = 0;
+      const maxAttempts = 60; // 60 x 4s = 4 minutes max
 
-        const { deductCredits } = await import('@/lib/credits');
-        const { saveGeneration } = await import('@/lib/generations');
-        await deductCredits(user.uid, 2);
-        await saveGeneration({
-          outsetaUid: user.uid,
-          toolName: 'AI Rig Animation',
-          prompt,
-          imageUrl: data.animationUrl,
-          creditsUsed: 2,
+      while (attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 4000));
+        attempts++;
+
+        const pollRes = await fetch('/api/generate-rig-animation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestId }),
         });
-      } else {
-        throw new Error('Generation failed — no animation returned');
+        const pollData = await pollRes.json();
+
+        if (pollData.error) throw new Error(pollData.error);
+
+        if (pollData.status === 'succeeded' && pollData.animationUrl) {
+          animUrl = pollData.animationUrl;
+          break;
+        }
+        // status === 'pending' → keep polling
       }
+
+      if (!animUrl) throw new Error('Generation timed out — please try again');
+
+      setAnimationUrl(animUrl);
+      setIsPlaying(true);
+
+      const { deductCredits } = await import('@/lib/credits');
+      const { saveGeneration } = await import('@/lib/generations');
+      await deductCredits(user.uid, 2);
+      await saveGeneration({
+        outsetaUid: user.uid,
+        toolName: 'AI Rig Animation',
+        prompt,
+        imageUrl: animUrl,
+        creditsUsed: 2,
+      });
+
     } catch (err) {
       alert(err.message || 'Error generating animation');
     } finally {
