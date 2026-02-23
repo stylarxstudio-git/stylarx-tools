@@ -42,7 +42,7 @@ function AnimatedModel({ url, playing }) {
     if (action) action.paused = !playing;
   }, [playing]);
 
-  return <primitive ref={groupRef} object={fbx} scale={0.1} position={[0, -1.5, 0]} />;
+  return <primitive ref={groupRef} object={fbx} scale={0.015} position={[0, -1.5, 0]} />;
 }
 
 
