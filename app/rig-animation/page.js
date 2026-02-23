@@ -1,49 +1,15 @@
 'use client';
 import { useState, Suspense, useRef, useEffect } from 'react';
-import { Canvas, useLoader } from '@react-three/fiber';
-import { OrbitControls, useAnimations } from '@react-three/drei';
 import { ArrowLeft, Sparkles, Download, X, RotateCcw, Play, Pause } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
-import * as THREE from 'three';
+import dynamic from 'next/dynamic';
 
-// Loads the generated FBX and plays its embedded animation
-function AnimatedModel({ url, playing }) {
-  const fbx = useLoader(FBXLoader, url);
-  const groupRef = useRef();
-  const { actions, names } = useAnimations(fbx.animations, groupRef);
+// Dynamic import with ssr:false prevents Three.js from running server-side
+// which causes the white screen crash on mobile and desktop
+const RigScene = dynamic(() => import('./RigScene'), { ssr: false, loading: () => null });
 
-  useEffect(() => {
-    fbx.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-        if (!child.material) {
-          child.material = new THREE.MeshStandardMaterial({ color: '#b0b0b0' });
-        }
-      }
-    });
-  }, [fbx]);
 
-  useEffect(() => {
-    if (!names.length) return;
-    const action = actions[names[0]];
-    if (!action) return;
-    action.reset();
-    action.setLoop(THREE.LoopRepeat, Infinity);
-    action.play();
-    action.paused = !playing;
-  }, [actions, names]);
-
-  useEffect(() => {
-    if (!names.length) return;
-    const action = actions[names[0]];
-    if (action) action.paused = !playing;
-  }, [playing]);
-
-  return <primitive ref={groupRef} object={fbx} scale={0.015} position={[0, -1.5, 0]} />;
-}
 
 
 
@@ -212,43 +178,13 @@ export default function RigAnimation() {
   return (
     <div className="flex flex-col min-h-screen bg-[#1a1a1a] text-white font-sans overflow-hidden relative">
 
-      {/* 3D SCENE */}
-      <div className="fixed inset-0 z-0 bg-gradient-to-b from-[#2a2a2a] to-[#1a1a1a]">
-        <Canvas shadows camera={{ position: [0, 1, 4], fov: 50 }} gl={{ antialias: true }}>
-          <Suspense fallback={null}>
-            <ambientLight intensity={1.5} />
-            <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow shadow-mapSize={[2048, 2048]} />
-            <directionalLight position={[-10, 10, -5]} intensity={0.8} />
-            <pointLight position={[0, 5, 0]} intensity={0.8} />
-
-            {animationUrl && (
-              <AnimatedModel url={animationUrl} playing={isPlaying} />
-            )}
-
-            <OrbitControls
-              ref={controlsRef}
-              enableZoom enablePan
-              minDistance={1} maxDistance={15}
-              target={[0, 0, 0]}
-              makeDefault
-            />
-            <gridHelper args={[20, 20, '#555555', '#333333']} position={[0, -1.5, 0]} />
-          </Suspense>
-        </Canvas>
-
-        {/* Empty state hint */}
-        {!animationUrl && !isGenerating && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-center">
-              <div className="w-20 h-20 rounded-full bg-white/5 border-2 border-dashed border-white/10 flex items-center justify-center mx-auto mb-4">
-                <Sparkles size={28} className="text-white/20" />
-              </div>
-              <p className="text-white/30 text-base font-medium">Enter a prompt below</p>
-              <p className="text-white/15 text-sm mt-1">Your animated character will appear here</p>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* 3D SCENE — loaded dynamically, never SSR'd */}
+      <RigScene
+        animationUrl={animationUrl}
+        isPlaying={isPlaying}
+        isGenerating={isGenerating}
+        controlsRef={controlsRef}
+      />
 
       {/* GENERATING OVERLAY */}
       {isGenerating && <GeneratingOverlay elapsed={elapsed} />}
