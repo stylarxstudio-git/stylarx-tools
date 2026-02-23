@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Plus, Trash2, Play, Pause, Download, Sparkles, X, GripVertical, Mic } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Play, Pause, Download, Sparkles, X, Mic, Upload, Info } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 
@@ -8,7 +8,7 @@ const NONVERBALS = ['(laughs)', '(sighs)', '(gasps)', '(clears throat)', '(whisp
 
 const EXAMPLE_DIALOGUES = [
   {
-    name: 'Action Scene',
+    name: 'Action',
     lines: [
       { id: 1, speaker: 1, text: "Get down! They're right behind us." },
       { id: 2, speaker: 2, text: "I see them. How many?" },
@@ -32,7 +32,6 @@ const EXAMPLE_DIALOGUES = [
       { id: 2, speaker: 2, text: "(sighs) Yes. I knew." },
       { id: 3, speaker: 1, text: "And you said nothing." },
       { id: 4, speaker: 2, text: "I was trying to protect you." },
-      { id: 5, speaker: 1, text: "By lying to me? (laughs) That makes perfect sense." },
     ]
   },
 ];
@@ -42,6 +41,7 @@ export default function DialogueTTS() {
   const { user, loading } = useUser();
   const audioRef = useRef();
   const nextId = useRef(3);
+  const refAudioInputRef = useRef();
 
   const [lines, setLines] = useState([
     { id: 1, speaker: 1, text: '' },
@@ -53,27 +53,25 @@ export default function DialogueTTS() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [showNonverbals, setShowNonverbals] = useState(null); // line id
+  const [showNonverbals, setShowNonverbals] = useState(null);
 
-  const s1Color = '#a78bfa'; // purple
-  const s2Color = '#34d399'; // green
+  // Voice cloning state
+  const [voiceCloneMode, setVoiceCloneMode] = useState(false);
+  const [refAudioFile, setRefAudioFile] = useState(null);   // { url, name } — fal URL after upload
+  const [refAudioLocal, setRefAudioLocal] = useState(null); // local object URL for playback preview
+  const [refText, setRefText] = useState('');
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [showRefInfo, setShowRefInfo] = useState(false);
+
+  const s1Color = '#a78bfa';
+  const s2Color = '#34d399';
 
   const addLine = (speaker = 1) => {
     setLines(prev => [...prev, { id: nextId.current++, speaker, text: '' }]);
   };
-
-  const removeLine = (id) => {
-    setLines(prev => prev.filter(l => l.id !== id));
-  };
-
-  const updateLine = (id, field, value) => {
-    setLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
-  };
-
-  const toggleSpeaker = (id) => {
-    setLines(prev => prev.map(l => l.id === id ? { ...l, speaker: l.speaker === 1 ? 2 : 1 } : l));
-  };
-
+  const removeLine = (id) => setLines(prev => prev.filter(l => l.id !== id));
+  const updateLine = (id, field, value) => setLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+  const toggleSpeaker = (id) => setLines(prev => prev.map(l => l.id === id ? { ...l, speaker: l.speaker === 1 ? 2 : 1 } : l));
   const insertNonverbal = (lineId, nv) => {
     setLines(prev => prev.map(l => {
       if (l.id !== lineId) return l;
@@ -82,29 +80,65 @@ export default function DialogueTTS() {
     }));
     setShowNonverbals(null);
   };
-
   const loadExample = (example) => {
     nextId.current = example.lines.length + 1;
     setLines(example.lines.map((l, i) => ({ ...l, id: i + 1 })));
     setAudioUrl(null);
   };
 
-  const charCount = lines.map(l => l.text).join(' ').length;
-  const estimatedCost = ((charCount / 1000) * 0.04).toFixed(3);
+  // Upload reference audio to fal storage so we can pass a URL to the API
+  const handleRefAudioUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Local preview
+    setRefAudioLocal(URL.createObjectURL(file));
+    setIsUploadingAudio(true);
+
+    try {
+      // Upload to fal storage to get a public URL
+      const { fal } = await import('@fal-ai/client');
+      const uploadedUrl = await fal.storage.upload(file);
+      setRefAudioFile({ url: uploadedUrl, name: file.name });
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert('Failed to upload audio. Please try again.');
+      setRefAudioLocal(null);
+    } finally {
+      setIsUploadingAudio(false);
+    }
+  };
+
+  const removeRefAudio = () => {
+    setRefAudioFile(null);
+    setRefAudioLocal(null);
+    setRefText('');
+    if (refAudioInputRef.current) refAudioInputRef.current.value = '';
+  };
 
   const handleGenerate = async () => {
     const validLines = lines.filter(l => l.text.trim());
     if (!validLines.length || !user) { alert('Add some dialogue and log in first'); return; }
+    if (voiceCloneMode && (!refAudioFile || !refText.trim())) {
+      alert('Voice clone mode requires both a reference audio file and its transcript.');
+      return;
+    }
 
     setIsGenerating(true);
     setAudioUrl(null);
     setIsPlaying(false);
 
     try {
+      const body = { lines: validLines };
+      if (voiceCloneMode && refAudioFile) {
+        body.refAudioUrl = refAudioFile.url;
+        body.refText = refText.trim();
+      }
+
       const response = await fetch('/api/generate-dialogue-tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lines: validLines }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -112,7 +146,6 @@ export default function DialogueTTS() {
 
       if (data.status === 'succeeded' && data.audioUrl) {
         setAudioUrl(data.audioUrl);
-
         const { deductCredits } = await import('@/lib/credits');
         const { saveGeneration } = await import('@/lib/generations');
         await deductCredits(user.uid, 1);
@@ -153,7 +186,8 @@ export default function DialogueTTS() {
 
   const togglePlay = () => {
     if (!audioRef.current) return;
-    if (isPlaying) { audioRef.current.pause(); } else { audioRef.current.play(); }
+    if (isPlaying) audioRef.current.pause();
+    else audioRef.current.play();
   };
 
   useEffect(() => {
@@ -189,13 +223,10 @@ export default function DialogueTTS() {
         <button onClick={() => router.push('/tools')} className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all text-sm font-medium">
           <ArrowLeft size={16} /> Back to Tools
         </button>
-        <div className="flex items-center gap-3">
-          <div className="text-[10px] text-white/30 font-medium hidden sm:block">{charCount} chars · ~${estimatedCost}</div>
-          <div className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold text-white/50 uppercase tracking-wider">1 Credit</div>
-        </div>
+        <div className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold text-white/50 uppercase tracking-wider">1 Credit</div>
       </nav>
 
-      <main className="flex-1 pt-20 pb-40 px-4 sm:px-6 max-w-3xl mx-auto w-full">
+      <main className="flex-1 pt-20 pb-44 px-4 sm:px-6 max-w-3xl mx-auto w-full">
 
         {/* Header */}
         <div className="text-center mb-8 mt-4">
@@ -203,27 +234,98 @@ export default function DialogueTTS() {
             <Mic size={24} className="text-white/60" />
           </div>
           <h1 className="text-2xl font-black tracking-tight">Dialogue TTS</h1>
-          <p className="text-white/40 text-sm mt-1">Two-character dialogue generation with natural speech</p>
+          <p className="text-white/40 text-sm mt-1">Two-character dialogue with optional voice cloning</p>
+        </div>
+
+        {/* Voice Clone Toggle */}
+        <div className="mb-6 bg-white/[0.03] border border-white/10 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white/80">Voice Clone Mode</span>
+              <button onClick={() => setShowRefInfo(!showRefInfo)} className="text-white/30 hover:text-white/60 transition-colors">
+                <Info size={13} />
+              </button>
+            </div>
+            <button
+              onClick={() => setVoiceCloneMode(!voiceCloneMode)}
+              className={`w-11 h-6 rounded-full transition-all relative ${voiceCloneMode ? 'bg-violet-500' : 'bg-white/10'}`}
+            >
+              <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform bg-white ${voiceCloneMode ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+          {showRefInfo && (
+            <p className="text-[11px] text-white/40 mb-3 leading-relaxed">
+              Upload a 5–10 second audio clip and provide its transcript. The AI will clone the voice style from that clip and apply it to your entire dialogue.
+            </p>
+          )}
+
+          {voiceCloneMode && (
+            <div className="mt-4 space-y-4">
+              {/* Upload reference audio */}
+              {!refAudioFile ? (
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Reference Audio <span className="text-violet-400">*</span></label>
+                  <button
+                    onClick={() => refAudioInputRef.current?.click()}
+                    disabled={isUploadingAudio}
+                    className="w-full py-3 border border-dashed border-violet-500/30 rounded-xl text-xs text-violet-400/70 hover:border-violet-500/60 hover:text-violet-400 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isUploadingAudio ? (
+                      <><div className="w-3 h-3 border border-violet-400 border-t-transparent rounded-full animate-spin" /> Uploading...</>
+                    ) : (
+                      <><Upload size={14} /> Upload audio clip (5–10 seconds)</>
+                    )}
+                  </button>
+                  <input ref={refAudioInputRef} type="file" accept="audio/*" onChange={handleRefAudioUpload} className="hidden" />
+                  <p className="text-[10px] text-white/20 mt-1">WAV, MP3, M4A supported</p>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Reference Audio</label>
+                  <div className="flex items-center gap-3 bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3">
+                    <Mic size={14} className="text-violet-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-white/80 truncate">{refAudioFile.name}</p>
+                      {refAudioLocal && <audio src={refAudioLocal} controls className="mt-1 h-7 w-full" />}
+                    </div>
+                    <button onClick={removeRefAudio} className="text-white/30 hover:text-red-400 transition-colors flex-shrink-0"><X size={14} /></button>
+                  </div>
+                </div>
+              )}
+
+              {/* Reference transcript */}
+              <div>
+                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">
+                  Transcript of reference audio <span className="text-violet-400">*</span>
+                </label>
+                <textarea
+                  value={refText}
+                  onChange={(e) => setRefText(e.target.value)}
+                  placeholder="Type exactly what is said in the reference audio, using [S1] [S2] tags if two speakers are present. E.g: [S1] Hey, how are you doing today?"
+                  rows={3}
+                  className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:border-violet-500/40 resize-none"
+                />
+                <p className="text-[10px] text-white/20 mt-1">Must match the audio exactly for best results</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Speaker legend */}
-        <div className="flex items-center justify-center gap-6 mb-6">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full" style={{ background: s1Color }} />
-            <span className="text-xs font-bold text-white/60">Speaker 1</span>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ background: s1Color }} />
+              <span className="text-xs text-white/50 font-bold">Speaker 1</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ background: s2Color }} />
+              <span className="text-xs text-white/50 font-bold">Speaker 2</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full" style={{ background: s2Color }} />
-            <span className="text-xs font-bold text-white/60">Speaker 2</span>
-          </div>
-        </div>
-
-        {/* Example presets */}
-        <div className="mb-6">
-          <label className="text-[10px] text-white/30 uppercase tracking-wider font-bold mb-2 block">Load Example</label>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2">
             {EXAMPLE_DIALOGUES.map(ex => (
-              <button key={ex.name} onClick={() => loadExample(ex)} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs text-white/60 hover:text-white transition-all">
+              <button key={ex.name} onClick={() => loadExample(ex)} className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[10px] text-white/50 hover:text-white transition-all">
                 {ex.name}
               </button>
             ))}
@@ -232,9 +334,8 @@ export default function DialogueTTS() {
 
         {/* Dialogue lines */}
         <div className="space-y-2 mb-4">
-          {lines.map((line, idx) => (
+          {lines.map((line) => (
             <div key={line.id} className="relative group flex items-start gap-2">
-              {/* Speaker toggle */}
               <button
                 onClick={() => toggleSpeaker(line.id)}
                 className="mt-2.5 w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black transition-all flex-shrink-0 border"
@@ -246,26 +347,16 @@ export default function DialogueTTS() {
               >
                 S{line.speaker}
               </button>
-
-              {/* Text input */}
               <div className="flex-1 relative">
                 <textarea
                   value={line.text}
                   onChange={(e) => updateLine(line.id, 'text', e.target.value)}
                   placeholder={`Speaker ${line.speaker} says...`}
                   rows={1}
-                  className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/20 resize-none transition-all"
-                  style={{
-                    borderLeftColor: line.speaker === 1 ? `${s1Color}44` : `${s2Color}44`,
-                    borderLeftWidth: 2,
-                    minHeight: 44,
-                  }}
-                  onInput={(e) => {
-                    e.target.style.height = 'auto';
-                    e.target.style.height = e.target.scrollHeight + 'px';
-                  }}
+                  className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-2.5 pr-14 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/20 resize-none transition-all"
+                  style={{ borderLeftColor: line.speaker === 1 ? `${s1Color}44` : `${s2Color}44`, borderLeftWidth: 2, minHeight: 44 }}
+                  onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
                 />
-                {/* Nonverbal insert button */}
                 <button
                   onClick={() => setShowNonverbals(showNonverbals === line.id ? null : line.id)}
                   className="absolute right-2 top-2 px-2 py-1 text-[9px] text-white/20 hover:text-white/50 hover:bg-white/5 rounded-lg transition-all font-bold uppercase tracking-wider"
@@ -282,8 +373,6 @@ export default function DialogueTTS() {
                   </div>
                 )}
               </div>
-
-              {/* Delete */}
               {lines.length > 1 && (
                 <button onClick={() => removeLine(line.id)} className="mt-2.5 w-8 h-8 flex items-center justify-center text-white/20 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0">
                   <Trash2 size={14} />
@@ -293,7 +382,7 @@ export default function DialogueTTS() {
           ))}
         </div>
 
-        {/* Add line buttons */}
+        {/* Add line */}
         <div className="flex gap-2 mb-8">
           <button onClick={() => addLine(1)} className="flex-1 py-2 border border-dashed rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5" style={{ borderColor: `${s1Color}33`, color: `${s1Color}99` }}>
             <Plus size={12} /> Speaker 1
@@ -311,11 +400,12 @@ export default function DialogueTTS() {
                 {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
               </button>
               <div className="flex-1">
-                <div className="text-xs text-white/50 mb-1.5 font-medium">Generated Dialogue</div>
+                <div className="text-xs text-white/50 mb-1.5 font-medium">
+                  Generated Dialogue {voiceCloneMode && <span className="text-violet-400 ml-1">· Voice Cloned</span>}
+                </div>
                 <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden cursor-pointer" onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
-                  const pct = (e.clientX - rect.left) / rect.width;
-                  if (audioRef.current) audioRef.current.currentTime = pct * duration;
+                  if (audioRef.current) audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
                 }}>
                   <div className="h-full bg-white rounded-full transition-all" style={{ width: duration ? `${(currentTime / duration) * 100}%` : '0%' }} />
                 </div>
@@ -329,13 +419,13 @@ export default function DialogueTTS() {
         )}
 
         {/* Tips */}
-        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 mb-4">
-          <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-2">Tips for best results</p>
+        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+          <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-2">Tips</p>
           <ul className="text-[11px] text-white/40 space-y-1 leading-relaxed">
-            <li>• Use the <span className="text-white/60 font-bold">+ fx</span> button to add natural sounds like laughter or sighs</li>
-            <li>• Keep lines conversational and natural — avoid overly formal language</li>
-            <li>• Short punchy lines work better than long monologues</li>
-            <li>• Speaker 1 and 2 have distinct auto-assigned voices</li>
+            <li>• Use <span className="text-white/60 font-bold">+ fx</span> to add sounds like laughter or sighs</li>
+            <li>• For voice cloning, use a clear 5–10s clip with minimal background noise</li>
+            <li>• The transcript must exactly match what's said in the reference audio</li>
+            <li>• Short punchy lines sound more natural than long monologues</li>
           </ul>
         </div>
       </main>
@@ -360,9 +450,11 @@ export default function DialogueTTS() {
               className="w-full py-4 bg-white hover:bg-gray-100 text-black font-bold rounded-2xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl text-base"
             >
               {isGenerating ? (
-                <><div className="h-5 w-5 border-2 border-black border-t-transparent animate-spin rounded-full" /> Generating Audio...</>
+                <><div className="h-5 w-5 border-2 border-black border-t-transparent animate-spin rounded-full" />
+                  {voiceCloneMode ? 'Cloning voice & generating...' : 'Generating audio...'}</>
               ) : (
-                <><Sparkles size={20} /> Generate Dialogue</>
+                <><Sparkles size={20} />
+                  {voiceCloneMode ? 'Generate with Cloned Voice' : 'Generate Dialogue'}</>
               )}
             </button>
           )}

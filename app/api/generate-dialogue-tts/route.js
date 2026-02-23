@@ -7,14 +7,12 @@ export const maxDuration = 120;
 
 export async function POST(request) {
   try {
-    const { lines } = await request.json();
+    const { lines, refAudioUrl, refText } = await request.json();
 
     if (!lines?.length) {
       return NextResponse.json({ error: 'No dialogue lines provided' }, { status: 400 });
     }
 
-    // Build the text string with [S1] [S2] speaker tags
-    // lines = [{ speaker: 1|2, text: string }, ...]
     const text = lines
       .map(line => `[S${line.speaker}] ${line.text.trim()}`)
       .join('\n');
@@ -23,18 +21,20 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Dialogue is empty' }, { status: 400 });
     }
 
-    // fal-ai/dia-tts — input: { text }, output: { audio: { url } }
-    const result = await fal.subscribe('fal-ai/dia-tts', {
-      input: { text },
-      logs: true,
-    });
+    const useVoiceClone = refAudioUrl && refText;
 
-    const audioUrl =
-      result?.audio?.url ||
-      result?.data?.audio?.url;
+    const modelId = useVoiceClone ? 'fal-ai/dia-tts/voice-clone' : 'fal-ai/dia-tts';
+
+    const input = useVoiceClone
+      ? { text, ref_audio_url: refAudioUrl, ref_text: refText }
+      : { text };
+
+    const result = await fal.subscribe(modelId, { input, logs: true });
+
+    const audioUrl = result?.audio?.url || result?.data?.audio?.url;
 
     if (!audioUrl) {
-      console.error('dia-tts full result:', JSON.stringify(result, null, 2));
+      console.error('dia-tts result:', JSON.stringify(result, null, 2));
       throw new Error('No audio returned from model');
     }
 
