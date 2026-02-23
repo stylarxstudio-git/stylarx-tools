@@ -105,6 +105,15 @@ export default function ToolsPage() {
       thumbnail: '/RigAnimationThumbnail.png',
       path: '/rig-animation',
       themeColor: '#ff0000' 
+    },
+    { 
+      id: 'dialogue-tts', 
+      name: 'Dialogue TTS', 
+      description: 'Generate two-character dialogue audio from scripts.', 
+      credits: 1, 
+      thumbnail: '/Dialogue-TTS-Thumbnail.jpg',
+      path: '/dialogue-tts',
+      themeColor: '#a78bfa' 
     }
   ];
 
