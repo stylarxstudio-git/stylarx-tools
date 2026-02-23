@@ -86,24 +86,32 @@ export default function DialogueTTS() {
     setAudioUrl(null);
   };
 
-  // Upload reference audio to fal storage so we can pass a URL to the API
+  // Upload reference audio via server route (keeps FAL_KEY server-side only)
   const handleRefAudioUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Local preview
     setRefAudioLocal(URL.createObjectURL(file));
     setIsUploadingAudio(true);
 
     try {
-      // Upload to fal storage to get a public URL
-      const { fal } = await import('@fal-ai/client');
-      const uploadedUrl = await fal.storage.upload(file);
-      setRefAudioFile({ url: uploadedUrl, name: file.name });
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload-audio', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Upload failed');
+
+      setRefAudioFile({ url: data.url, name: file.name });
     } catch (err) {
       console.error('Upload error:', err);
       alert('Failed to upload audio. Please try again.');
       setRefAudioLocal(null);
+      if (refAudioInputRef.current) refAudioInputRef.current.value = '';
     } finally {
       setIsUploadingAudio(false);
     }

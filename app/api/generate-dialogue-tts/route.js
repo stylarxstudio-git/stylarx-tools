@@ -3,47 +3,34 @@ import { fal } from '@fal-ai/client';
 
 fal.config({ credentials: process.env.FAL_KEY });
 
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 export async function POST(request) {
   try {
-    const { lines, refAudioUrl, refText } = await request.json();
+    const formData = await request.formData();
+    const file = formData.get('file');
 
-    if (!lines?.length) {
-      return NextResponse.json({ error: 'No dialogue lines provided' }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    const text = lines
-      .map(line => `[S${line.speaker}] ${line.text.trim()}`)
-      .join('\n');
+    // Convert the file to a Buffer then upload to fal storage
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
 
-    if (!text.trim()) {
-      return NextResponse.json({ error: 'Dialogue is empty' }, { status: 400 });
-    }
+    // Create a Blob from the buffer with the correct mime type
+    const blob = new Blob([buffer], { type: file.type || 'audio/mpeg' });
 
-    const useVoiceClone = refAudioUrl && refText;
+    const uploadedUrl = await fal.storage.upload(blob, {
+      filename: file.name || 'reference.mp3',
+    });
 
-    const modelId = useVoiceClone ? 'fal-ai/dia-tts/voice-clone' : 'fal-ai/dia-tts';
-
-    const input = useVoiceClone
-      ? { text, ref_audio_url: refAudioUrl, ref_text: refText }
-      : { text };
-
-    const result = await fal.subscribe(modelId, { input, logs: true });
-
-    const audioUrl = result?.audio?.url || result?.data?.audio?.url;
-
-    if (!audioUrl) {
-      console.error('dia-tts result:', JSON.stringify(result, null, 2));
-      throw new Error('No audio returned from model');
-    }
-
-    return NextResponse.json({ status: 'succeeded', audioUrl });
+    return NextResponse.json({ url: uploadedUrl });
 
   } catch (error) {
-    console.error('TTS error:', error);
+    console.error('Audio upload error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to generate audio' },
+      { error: error.message || 'Upload failed' },
       { status: 500 }
     );
   }
