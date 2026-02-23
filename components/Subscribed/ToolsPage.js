@@ -68,7 +68,7 @@ export default function ToolsPage() {
       credits: 2, 
       thumbnail: '/Image-to-PBR-Thumbnail.png',
       path: '/image-to-pbr',
-      themeColor: '#FF6B35'
+      themeColor: '#000000'
     },
     { 
       id: 'pbr-generator', 
@@ -104,7 +104,7 @@ export default function ToolsPage() {
       credits: 2, 
       thumbnail: '/RigAnimationThumbnail.png',
       path: '/rig-animation',
-      themeColor: '#FF00FF' 
+      themeColor: '#ff0000' 
     }
   ];
 
