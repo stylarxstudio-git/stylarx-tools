@@ -1,6 +1,6 @@
 'use client';
-import { useState, useRef, Suspense } from 'react';
-import { ArrowLeft, Sparkles, Download, X, Upload, Package, Check } from 'lucide-react';
+import { useState, useRef, Suspense, useEffect, useCallback } from 'react';
+import { ArrowLeft, Sparkles, Download, X, Upload, Package, Check, Shuffle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 import JSZip from 'jszip';
@@ -8,6 +8,12 @@ import { saveAs } from 'file-saver';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Sphere, Environment } from '@react-three/drei';
 import * as THREE from 'three';
+
+// Minimum scale factor to guarantee no gaps at any rotation angle
+function getMinScale(angleDeg) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return Math.abs(Math.cos(rad)) + Math.abs(Math.sin(rad));
+}
 
 function MaterialPreview({ textureUrl }) {
   const texture = new THREE.TextureLoader().load(textureUrl);
@@ -24,12 +30,15 @@ function MaterialPreview({ textureUrl }) {
   );
 }
 
-// Final compositor — Logic fixed for individual rotation + cohesive skew
 function compositeToCanvas(imageSrc, settings) {
   return new Promise((resolve) => {
     const img = new window.Image();
     img.onload = () => {
-      const { tileCount, tileRotation, tileSkewX, tileSkewY, edgeBlend, lightNorm, lightStrength, lightAngle, seamBlend } = settings;
+      const {
+        tileCount, tileRotation, tileSkewX, tileSkewY,
+        edgeBlend, seamBlend, lightNorm, lightStrength, lightAngle,
+        individualRotation, tileRotations,
+      } = settings;
       const tileSize = 1024;
       const total = tileCount * tileSize;
       const canvas = document.createElement('canvas');
@@ -37,45 +46,41 @@ function compositeToCanvas(imageSrc, settings) {
       canvas.height = total;
       const ctx = canvas.getContext('2d');
 
-      // Individual tile drawing
       for (let row = 0; row < tileCount; row++) {
         for (let col = 0; col < tileCount; col++) {
           const cx = col * tileSize + tileSize / 2;
           const cy = row * tileSize + tileSize / 2;
+          const angle = individualRotation
+            ? (tileRotations[row * tileCount + col] || 0)
+            : tileRotation;
+          // Scale to guarantee full fill at this angle + extra for skew
+          const minScale = getMinScale(angle) * (1 + Math.abs(tileSkewX) / 100 + Math.abs(tileSkewY) / 100);
+          const drawSize = tileSize * minScale;
+
           ctx.save();
           ctx.translate(cx, cy);
-          
-          // Uniform Rotation per tile (Box B)
-          ctx.rotate((tileRotation * Math.PI) / 180);
-          
-          // Skewing the content inside the tile
+          ctx.rotate((angle * Math.PI) / 180);
           ctx.transform(1, tileSkewY / 100, tileSkewX / 100, 1, 0, 0);
-          
-          // Draw image slightly oversized to hide skew gaps
-          const scale = tileSize * 1.5; 
-          ctx.drawImage(img, -scale / 2, -scale / 2, scale, scale);
+          ctx.drawImage(img, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
           ctx.restore();
         }
       }
 
-      // Seam Dissolve Pass
       if (seamBlend > 0 && tileCount > 1) {
         const tmp = document.createElement('canvas');
         tmp.width = total; tmp.height = total;
         tmp.getContext('2d').drawImage(canvas, 0, 0);
         ctx.globalAlpha = seamBlend;
-        ctx.drawImage(tmp, tileSize/2, tileSize/2, total, total, 0, 0, total, total);
+        ctx.drawImage(tmp, tileSize / 2, tileSize / 2, total, total, 0, 0, total, total);
         ctx.globalAlpha = 1;
       }
 
-      // Global Light Pass (The Gradient)
       if (lightNorm && lightStrength > 0) {
         const rad = (lightAngle * Math.PI) / 180;
-        const x0 = total/2 - Math.cos(rad) * total;
-        const y0 = total/2 - Math.sin(rad) * total;
-        const x1 = total/2 + Math.cos(rad) * total;
-        const y1 = total/2 + Math.sin(rad) * total;
-        
+        const x0 = total / 2 - Math.cos(rad) * total;
+        const y0 = total / 2 - Math.sin(rad) * total;
+        const x1 = total / 2 + Math.cos(rad) * total;
+        const y1 = total / 2 + Math.sin(rad) * total;
         const g = ctx.createLinearGradient(x0, y0, x1, y1);
         const s = lightStrength / 100;
         g.addColorStop(0, `rgba(255,255,255,${s * 0.2})`);
@@ -97,32 +102,23 @@ const TABS = ['Grid', 'Angle', 'Light', 'Output'];
 
 function Slider({ label, value, min, max, step = 1, unit = '', onChange, disabled = false }) {
   const trackRef = useRef();
-  const getValueFromEvent = (clientX) => {
+  const getVal = (clientX) => {
     const rect = trackRef.current.getBoundingClientRect();
     const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
     const raw = min + pct * (max - min);
-    const stepped = Math.round(raw / step) * step;
-    return Math.min(max, Math.max(min, parseFloat(stepped.toFixed(10))));
-  };
-  const handlePointerDown = (e) => {
-    if (disabled) return;
-    e.preventDefault();
-    trackRef.current.setPointerCapture(e.pointerId);
-    onChange(getValueFromEvent(e.clientX));
-  };
-  const handlePointerMove = (e) => {
-    if (disabled) return;
-    if (e.buttons === 0 && e.pressure === 0) return;
-    onChange(getValueFromEvent(e.clientX));
+    return Math.min(max, Math.max(min, parseFloat((Math.round(raw / step) * step).toFixed(10))));
   };
   const pct = ((value - min) / (max - min)) * 100;
   return (
-    <div className={`mb-5 transition-opacity select-none ${disabled ? 'opacity-25 pointer-events-none' : 'opacity-100'}`}>
+    <div className={`mb-5 select-none transition-opacity ${disabled ? 'opacity-25 pointer-events-none' : ''}`}>
       <div className="flex justify-between text-[11px] mb-2">
         <span className="text-white/50 font-medium">{label}</span>
         <span className="text-white font-bold">{step < 1 ? (value * 100).toFixed(0) + (unit || '%') : `${value}${unit}`}</span>
       </div>
-      <div ref={trackRef} className="relative h-5 flex items-center cursor-pointer" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}>
+      <div ref={trackRef} className="relative h-5 flex items-center cursor-pointer"
+        onPointerDown={(e) => { if (disabled) return; e.preventDefault(); trackRef.current.setPointerCapture(e.pointerId); onChange(getVal(e.clientX)); }}
+        onPointerMove={(e) => { if (disabled || (e.buttons === 0 && e.pressure === 0)) return; onChange(getVal(e.clientX)); }}
+      >
         <div className="absolute w-full h-1.5 bg-white/10 rounded-full">
           <div className="h-full bg-white rounded-full" style={{ width: `${pct}%` }} />
         </div>
@@ -151,6 +147,9 @@ export default function ImageToPBR() {
   const { user, loading } = useUser();
   const fileInputRef = useRef();
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const [uploadedImage, setUploadedImage] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState('');
@@ -170,6 +169,21 @@ export default function ImageToPBR() {
   const [resolution, setResolution] = useState('4K');
   const [pbSeamless, setPbSeamless] = useState(false);
   const [resultMaps, setResultMaps] = useState({ normal: null, height: null, roughness: null, ao: null, original: null });
+
+  // Individual rotation state
+  const [individualRotation, setIndividualRotation] = useState(false);
+  const [tileRotations, setTileRotations] = useState([]); // per-tile random angles
+
+  // Generate random angles for all tiles
+  const randomizeTileRotations = useCallback(() => {
+    const total = tileCount * tileCount;
+    setTileRotations(Array.from({ length: total }, () => Math.floor(Math.random() * 360)));
+  }, [tileCount]);
+
+  // Re-randomize when tile count changes or individual mode toggled on
+  useEffect(() => {
+    if (individualRotation) randomizeTileRotations();
+  }, [tileCount, individualRotation, randomizeTileRotations]);
 
   const calculateCredits = () => {
     let c = 2;
@@ -200,65 +214,85 @@ export default function ImageToPBR() {
     setSelectedMaps(p => ({ ...p, [k]: !p[k] }));
   };
 
+  // CSS preview tile: always fills with object-fit cover + scale for rotation gaps
+  const getTileStyle = (tileIdx) => {
+    const angle = individualRotation
+      ? (tileRotations[tileIdx] || 0)
+      : tileRotation;
+    const minScale = getMinScale(angle) * (1 + (Math.abs(tileSkewX) + Math.abs(tileSkewY)) / 100);
+    return {
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+      position: 'absolute',
+      top: 0, left: 0,
+      // Scale up enough to guarantee full fill, then rotate + skew
+      transform: `scale(${minScale}) rotate(${angle}deg) skewX(${tileSkewX}deg) skewY(${tileSkewY}deg)`,
+      transformOrigin: 'center center',
+    };
+  };
+
   const renderTileGrid = () => {
     if (!uploadedImage) return null;
     const count = Math.max(1, tileCount);
-    const size = 560;
-    const cellPx = size / count;
-
-    const tiles = [];
-    for (let r = 0; r < count; r++) {
-      for (let c = 0; c < count; c++) {
-        tiles.push(
-          <div key={`${r}-${c}`} style={{
-            position: 'absolute',
-            left: c * cellPx,
-            top: r * cellPx,
-            width: cellPx,
-            height: cellPx,
-            overflow: 'hidden'
-          }}>
-            <img src={uploadedImage} alt="" draggable={false} style={{
-              width: '140%', // Oversized to prevent skew gaps
-              height: '140%',
-              position: 'absolute',
-              top: '-20%',
-              left: '-20%',
-              objectFit: 'cover',
-              transform: `rotate(${tileRotation}deg) skewX(${tileSkewX}deg) skewY(${tileSkewY}deg)`,
-              transformOrigin: 'center center'
-            }} />
-            {edgeBlend > 0 && (
-              <div style={{
-                position: 'absolute', inset: 0,
-                boxShadow: `inset 0 0 ${cellPx * edgeBlend}px rgba(0,0,0,0.8)`
-              }} />
-            )}
-          </div>
-        );
-      }
-    }
+    const PREVIEW_SIZE = 560;
+    const cellPx = PREVIEW_SIZE / count;
 
     return (
-      <div style={{ position: 'relative', width: size, height: size, borderRadius: 14, overflow: 'hidden', boxShadow: '0 25px 60px rgba(0,0,0,0.6)' }}>
-        <div style={{ position: 'absolute', inset: 0 }}>{tiles}</div>
-        {/* Seam Dissolve Overlay Preview */}
+      <div style={{
+        position: 'relative',
+        width: PREVIEW_SIZE,
+        height: PREVIEW_SIZE,
+        borderRadius: 14,
+        overflow: 'hidden',
+        boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
+        // Clip everything to the square
+        flexShrink: 0,
+      }}>
+        {Array.from({ length: count * count }).map((_, idx) => {
+          const row = Math.floor(idx / count);
+          const col = idx % count;
+          return (
+            <div key={idx} style={{
+              position: 'absolute',
+              left: col * cellPx,
+              top: row * cellPx,
+              width: cellPx,
+              height: cellPx,
+              overflow: 'hidden', // clip image to this cell
+            }}>
+              <img
+                src={uploadedImage}
+                alt=""
+                draggable={false}
+                style={getTileStyle(idx)}
+              />
+              {edgeBlend > 0 && (
+                <div style={{
+                  position: 'absolute', inset: 0, pointerEvents: 'none',
+                  boxShadow: `inset 0 0 ${cellPx * edgeBlend * 2}px rgba(0,0,0,0.75)`,
+                }} />
+              )}
+            </div>
+          );
+        })}
+        {/* Seam dissolve overlay */}
         {seamBlend > 0 && count > 1 && (
           <div style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
             backgroundImage: `url(${uploadedImage})`,
             backgroundSize: `${cellPx}px ${cellPx}px`,
-            backgroundPosition: `${cellPx/2}px ${cellPx/2}px`,
+            backgroundPosition: `${cellPx / 2}px ${cellPx / 2}px`,
             opacity: seamBlend,
-            mixBlendMode: 'overlay'
+            mixBlendMode: 'overlay',
           }} />
         )}
-        {/* Light Overlay Preview */}
+        {/* Light overlay */}
         {lightNorm && (
           <div style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: `linear-gradient(${lightAngle}deg, rgba(255,255,255,${lightStrength/200}), transparent, rgba(0,0,0,${lightStrength/150}))`,
-            mixBlendMode: 'overlay'
+            background: `linear-gradient(${lightAngle}deg, rgba(255,255,255,${lightStrength / 200}), transparent, rgba(0,0,0,${lightStrength / 150}))`,
+            mixBlendMode: 'overlay',
           }} />
         )}
       </div>
@@ -271,17 +305,32 @@ export default function ImageToPBR() {
     const composited = await compositeToCanvas(uploadedImage, {
       tileCount, tileRotation, tileSkewX, tileSkewY, edgeBlend, seamBlend,
       lightNorm, lightStrength, lightAngle,
+      individualRotation, tileRotations,
     });
     const generatedMaps = { original: composited };
     try {
       if (selectedMaps.normal) {
         setGenerationProgress('Generating maps...');
-        const res = await fetch('/api/generate-image-to-pbr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: composited, userId: user.uid, userEmail: user.email, step: 'normal', resolution, seamless: pbSeamless }) });
+        const res = await fetch('/api/generate-image-to-pbr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: composited, userId: user.uid, userEmail: user.email, step: 'normal', resolution, seamless: pbSeamless }),
+        });
         const data = await res.json();
         if (data.status === 'succeeded') generatedMaps.normal = data.output;
       }
       setResultMaps(generatedMaps);
-    } catch (err) { alert('Error'); } finally { setIsGenerating(false); setGenerationProgress(''); }
+
+      const { deductCredits } = await import('@/lib/credits');
+      const { saveGeneration } = await import('@/lib/generations');
+      await deductCredits(user.uid, calculateCredits());
+      await saveGeneration({ outsetaUid: user.uid, toolName: 'Image to PBR', prompt: 'Texture conversion', imageUrl: generatedMaps.normal || generatedMaps.original, creditsUsed: calculateCredits() });
+    } catch (err) {
+      alert('Error generating PBR maps');
+    } finally {
+      setIsGenerating(false);
+      setGenerationProgress('');
+    }
   };
 
   const handleDownloadAll = async () => {
@@ -295,7 +344,7 @@ export default function ImageToPBR() {
   return (
     <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-white font-sans overflow-hidden relative">
       <div className="fixed inset-0 z-0 bg-[#0a0a0a]">
-        {resultMaps.normal && showPreview ? (
+        {resultMaps.normal && showPreview && mounted ? (
           <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
             <Suspense fallback={null}><MaterialPreview textureUrl={resultMaps.normal} /></Suspense>
           </Canvas>
@@ -314,13 +363,20 @@ export default function ImageToPBR() {
           <div className="w-full h-full flex items-center justify-center group">
             <div className="relative">
               {renderTileGrid()}
-              <button onClick={handleRemoveImage} className="absolute top-3 right-3 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xl border border-white/10"><X size={16} /></button>
+              <button
+                onClick={handleRemoveImage}
+                className="absolute -top-3 -right-3 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-xl border border-white/10"
+              >
+                <X size={16} />
+              </button>
             </div>
           </div>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <button onClick={() => fileInputRef.current?.click()} className="group">
-              <div className="w-28 h-28 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center mx-auto mb-5 border-2 border-dashed border-white/10"><Upload size={36} className="text-white/40" /></div>
+              <div className="w-28 h-28 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center mx-auto mb-5 border-2 border-dashed border-white/10">
+                <Upload size={36} className="text-white/40" />
+              </div>
               <p className="text-xl text-white/60 font-medium">Upload a texture</p>
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
@@ -328,17 +384,24 @@ export default function ImageToPBR() {
         )}
       </div>
 
+      {/* NAV */}
       <nav className="p-6 fixed top-0 left-0 w-full z-50 pointer-events-none">
         <button onClick={() => router.push('/tools')} className="pointer-events-auto flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all backdrop-blur-md">
           <ArrowLeft size={18} /><span className="text-sm font-medium">Back</span>
         </button>
       </nav>
 
+      {/* SETTINGS PANEL */}
       {uploadedImage && !resultMaps.normal && (
         <aside className="fixed top-6 right-6 z-50 w-80 bg-[#0f0f0f]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
           <div className="grid grid-cols-4 gap-0.5 bg-white/5 p-1 m-3 rounded-xl">
-            {TABS.map(tab => (<button key={tab} onClick={() => setActiveTab(tab)} className={`py-1.5 text-[10px] font-bold rounded-lg transition-all ${activeTab === tab ? 'bg-white text-black' : 'text-white/40 hover:text-white/70'}`}>{tab}</button>))}
+            {TABS.map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`py-1.5 text-[10px] font-bold rounded-lg transition-all ${activeTab === tab ? 'bg-white text-black' : 'text-white/40 hover:text-white/70'}`}>
+                {tab}
+              </button>
+            ))}
           </div>
+
           <div className="overflow-y-auto px-4 pb-5">
             {activeTab === 'Grid' && (
               <>
@@ -347,13 +410,33 @@ export default function ImageToPBR() {
                 <Slider label="Seam Dissolve" value={seamBlend} min={0} max={1} step={0.01} onChange={setSeamBlend} />
               </>
             )}
+
             {activeTab === 'Angle' && (
               <>
-                <Slider label="Tile Rotation" value={tileRotation} min={0} max={180} unit="°" onChange={setTileRotation} />
+                {/* Individual rotation toggle */}
+                <Toggle
+                  label="Individual Rotation"
+                  sub="Each tile gets its own random angle"
+                  value={individualRotation}
+                  onChange={(v) => { setIndividualRotation(v); if (v) randomizeTileRotations(); }}
+                />
+
+                {individualRotation ? (
+                  <button
+                    onClick={randomizeTileRotations}
+                    className="w-full mb-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white/70 flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Shuffle size={13} /> Randomize All Angles
+                  </button>
+                ) : (
+                  <Slider label="Tile Rotation" value={tileRotation} min={0} max={360} unit="°" onChange={setTileRotation} />
+                )}
+
                 <Slider label="Horizontal Shear" value={tileSkewX} min={-30} max={30} unit="°" onChange={setTileSkewX} />
                 <Slider label="Vertical Shear" value={tileSkewY} min={-30} max={30} unit="°" onChange={setTileSkewY} />
               </>
             )}
+
             {activeTab === 'Light' && (
               <>
                 <Toggle label="Lighting Overlay" value={lightNorm} onChange={setLightNorm} />
@@ -361,19 +444,38 @@ export default function ImageToPBR() {
                 <Slider label="Light Direction" value={lightAngle} min={0} max={360} unit="°" onChange={setLightAngle} disabled={!lightNorm} />
               </>
             )}
+
+            {activeTab === 'Output' && (
+              <>
+                <div className="mb-5">
+                  <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Resolution</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {['2K', '4K', '8K'].map(r => (
+                      <button key={r} onClick={() => setResolution(r)} className={`py-2 text-xs font-bold rounded-xl border transition-all ${resolution === r ? 'bg-white text-black border-white' : 'bg-white/5 text-white/50 border-white/10'}`}>{r}</button>
+                    ))}
+                  </div>
+                </div>
+                <Toggle label="Seamless Tiling" sub="Blend edges for tileable output" value={pbSeamless} onChange={setPbSeamless} />
+              </>
+            )}
           </div>
         </aside>
       )}
 
+      {/* FOOTER */}
       <footer className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-4xl px-6 text-center">
         {resultMaps.normal ? (
           <div className="flex gap-3 justify-center">
-             <button onClick={() => setResultMaps({ normal: null, original: null })} className="px-8 py-3.5 bg-white/10 text-white rounded-2xl font-bold">Reset</button>
-             <button onClick={handleDownloadAll} className="px-8 py-3.5 bg-white text-black rounded-2xl font-bold">Download All</button>
+            <button onClick={() => setResultMaps({ normal: null, original: null })} className="px-8 py-3.5 bg-white/10 text-white rounded-2xl font-bold border border-white/10">Reset</button>
+            <button onClick={handleDownloadAll} className="px-8 py-3.5 bg-white text-black rounded-2xl font-bold flex items-center gap-2"><Package size={16} /> Download All</button>
           </div>
         ) : (
-          <button onClick={handleGenerate} disabled={!uploadedImage || isGenerating} className="w-full py-3.5 bg-white text-black font-bold rounded-2xl">
-            {isGenerating ? 'Generating...' : `Generate PBR Maps (${calculateCredits()} Credits)`}
+          <button
+            onClick={handleGenerate}
+            disabled={!uploadedImage || isGenerating || loading}
+            className="w-full py-3.5 bg-white text-black font-bold rounded-2xl disabled:opacity-50 transition-all"
+          >
+            {isGenerating ? generationProgress || 'Generating...' : `Generate PBR Maps (${calculateCredits()} Credits)`}
           </button>
         )}
       </footer>
