@@ -15,8 +15,11 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
-        
-        <Script id="outseta-options" strategy="afterInteractive">
+      </head>
+      <body className="antialiased font-['Poppins',sans-serif]">
+
+        {/* Load Outseta as early as possible — beforeInteractive runs before hydration */}
+        <Script id="outseta-options" strategy="beforeInteractive">
           {`
             var o_options = {
               domain: "stylarx.outseta.com",
@@ -25,13 +28,12 @@ export default function RootLayout({ children }) {
             };
           `}
         </Script>
-        <Script 
-          src="https://cdn.outseta.com/outseta.min.js" 
+        <Script
+          src="https://cdn.outseta.com/outseta.min.js"
           data-options="o_options"
-          strategy="afterInteractive"
+          strategy="beforeInteractive"
         />
-      </head>
-      <body className="antialiased font-['Poppins',sans-serif]">
+
         <UserProvider>
           {children}
           <Footer />
