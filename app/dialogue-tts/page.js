@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Plus, Trash2, Play, Pause, Download, Sparkles, X, Mic } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Play, Pause, Download, Sparkles, X, Mic, Upload, Info } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 
@@ -13,14 +13,14 @@ const EXAMPLE_DIALOGUES = [
       { id: 1, speaker: 1, text: "Get down! They're right behind us." },
       { id: 2, speaker: 2, text: "I see them. How many?" },
       { id: 3, speaker: 1, text: "Too many. We need to move. Now." },
-      { id: 4, speaker: 2, text: "I really hate Tuesdays." },
+      { id: 4, speaker: 2, text: "(sighs) I really hate Tuesdays." },
     ]
   },
   {
     name: 'Comedy',
     lines: [
       { id: 1, speaker: 1, text: "Did you eat my sandwich?" },
-      { id: 2, speaker: 2, text: "Define sandwich." },
+      { id: 2, speaker: 2, text: "(nervous laugh) Define sandwich." },
       { id: 3, speaker: 1, text: "The one with my name literally written on it." },
       { id: 4, speaker: 2, text: "I thought that was a suggestion." },
     ]
@@ -29,7 +29,7 @@ const EXAMPLE_DIALOGUES = [
     name: 'Drama',
     lines: [
       { id: 1, speaker: 1, text: "You knew the whole time, didn't you?" },
-      { id: 2, speaker: 2, text: "Yes. I knew." },
+      { id: 2, speaker: 2, text: "(sighs) Yes. I knew." },
       { id: 3, speaker: 1, text: "And you said nothing." },
       { id: 4, speaker: 2, text: "I was trying to protect you." },
     ]
@@ -41,6 +41,7 @@ export default function DialogueTTS() {
   const { user, loading } = useUser();
   const audioRef = useRef();
   const nextId = useRef(3);
+  const refAudioInputRef = useRef();
 
   const [lines, setLines] = useState([
     { id: 1, speaker: 1, text: '' },
@@ -53,6 +54,14 @@ export default function DialogueTTS() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [showNonverbals, setShowNonverbals] = useState(null);
+
+  // Voice cloning state
+  const [voiceCloneMode, setVoiceCloneMode] = useState(false);
+  const [refAudioFile, setRefAudioFile] = useState(null);   // { url, name } — fal URL after upload
+  const [refAudioLocal, setRefAudioLocal] = useState(null); // local object URL for playback preview
+  const [refText, setRefText] = useState('');
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [showRefInfo, setShowRefInfo] = useState(false);
 
   const s1Color = '#a78bfa';
   const s2Color = '#34d399';
@@ -77,99 +86,81 @@ export default function DialogueTTS() {
     setAudioUrl(null);
   };
 
-  // Merge multiple audio URLs into one WAV blob using Web Audio API
-  const mergeAudioUrls = async (urls) => {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const buffers = await Promise.all(
-      urls.map(async (url) => {
-        const res = await fetch(url);
-        const arrayBuf = await res.arrayBuffer();
-        return audioCtx.decodeAudioData(arrayBuf);
-      })
-    );
-    // Total length
-    const totalLength = buffers.reduce((sum, b) => sum + b.length, 0);
-    const sampleRate = buffers[0].sampleRate;
-    const channels = buffers[0].numberOfChannels;
-    const merged = audioCtx.createBuffer(channels, totalLength, sampleRate);
-    let offset = 0;
-    for (const buf of buffers) {
-      for (let ch = 0; ch < channels; ch++) {
-        merged.getChannelData(ch).set(buf.getChannelData(ch), offset);
-      }
-      offset += buf.length;
+  // Upload reference audio via server route (keeps FAL_KEY server-side only)
+  const handleRefAudioUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setRefAudioLocal(URL.createObjectURL(file));
+    setIsUploadingAudio(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload-audio', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Upload failed');
+
+      setRefAudioFile({ url: data.url, name: file.name });
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert('Failed to upload audio. Please try again.');
+      setRefAudioLocal(null);
+      if (refAudioInputRef.current) refAudioInputRef.current.value = '';
+    } finally {
+      setIsUploadingAudio(false);
     }
-    // Encode to WAV blob
-    const wavBlob = audioBufferToWav(merged);
-    await audioCtx.close();
-    return URL.createObjectURL(wavBlob);
   };
 
-  // Simple WAV encoder
-  const audioBufferToWav = (buffer) => {
-    const numChannels = buffer.numberOfChannels;
-    const sampleRate = buffer.sampleRate;
-    const numFrames = buffer.length;
-    const bitDepth = 16;
-    const bytesPerSample = bitDepth / 8;
-    const blockAlign = numChannels * bytesPerSample;
-    const byteRate = sampleRate * blockAlign;
-    const dataSize = numFrames * blockAlign;
-    const arrayBuffer = new ArrayBuffer(44 + dataSize);
-    const view = new DataView(arrayBuffer);
-    const writeStr = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
-    writeStr(0, 'RIFF');
-    view.setUint32(4, 36 + dataSize, true);
-    writeStr(8, 'WAVE');
-    writeStr(12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, byteRate, true);
-    view.setUint16(32, blockAlign, true);
-    view.setUint16(34, bitDepth, true);
-    writeStr(36, 'data');
-    view.setUint32(40, dataSize, true);
-    let offset = 44;
-    for (let i = 0; i < numFrames; i++) {
-      for (let ch = 0; ch < numChannels; ch++) {
-        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]));
-        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
-        offset += 2;
-      }
-    }
-    return new Blob([arrayBuffer], { type: 'audio/wav' });
+  const removeRefAudio = () => {
+    setRefAudioFile(null);
+    setRefAudioLocal(null);
+    setRefText('');
+    if (refAudioInputRef.current) refAudioInputRef.current.value = '';
   };
 
   const handleGenerate = async () => {
     const validLines = lines.filter(l => l.text.trim());
     if (!validLines.length || !user) { alert('Add some dialogue and log in first'); return; }
+    if (voiceCloneMode && (!refAudioFile || !refText.trim())) {
+      alert('Voice clone mode requires both a reference audio file and its transcript.');
+      return;
+    }
 
     setIsGenerating(true);
     setAudioUrl(null);
     setIsPlaying(false);
 
     try {
+      const body = { lines: validLines };
+      if (voiceCloneMode && refAudioFile) {
+        body.refAudioUrl = refAudioFile.url;
+        body.refText = refText.trim();
+      }
+
       const response = await fetch('/api/generate-dialogue-tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lines: validLines }),
+        body: JSON.stringify(body),
       });
 
+      // Read as text first so we can show the real error if it's not JSON
       const rawText = await response.text();
       let data;
-      try { data = JSON.parse(rawText); }
-      catch { throw new Error(`Server error (${response.status}): ${rawText.slice(0, 200)}`); }
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(`Server error (${response.status}): ${rawText.slice(0, 200)}`);
+      }
       if (data.error) throw new Error(data.error);
 
-      if (data.status === 'succeeded' && data.audioUrls?.length) {
-        // Merge all line audio clips into one
-        const mergedUrl = data.audioUrls.length === 1
-          ? data.audioUrls[0]
-          : await mergeAudioUrls(data.audioUrls);
-
-        setAudioUrl(mergedUrl);
+      if (data.status === 'succeeded' && data.audioUrl) {
+        setAudioUrl(data.audioUrl);
         const { deductCredits } = await import('@/lib/credits');
         const { saveGeneration } = await import('@/lib/generations');
         await deductCredits(user.uid, 1);
@@ -177,7 +168,7 @@ export default function DialogueTTS() {
           outsetaUid: user.uid,
           toolName: 'Dialogue TTS',
           prompt: validLines.map(l => `[S${l.speaker}] ${l.text}`).join(' | '),
-          imageUrl: mergedUrl,
+          imageUrl: data.audioUrl,
           creditsUsed: 1,
         });
       } else {
@@ -258,7 +249,81 @@ export default function DialogueTTS() {
             <Mic size={24} className="text-white/60" />
           </div>
           <h1 className="text-2xl font-black tracking-tight">Dialogue TTS</h1>
-          <p className="text-white/40 text-sm mt-1">Two-character dialogue · Speaker 1 is female, Speaker 2 is male</p>
+          <p className="text-white/40 text-sm mt-1">Two-character dialogue with optional voice cloning</p>
+        </div>
+
+        {/* Voice Clone Toggle */}
+        <div className="mb-6 bg-white/[0.03] border border-white/10 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white/80">Voice Clone Mode</span>
+              <button onClick={() => setShowRefInfo(!showRefInfo)} className="text-white/30 hover:text-white/60 transition-colors">
+                <Info size={13} />
+              </button>
+            </div>
+            <button
+              onClick={() => setVoiceCloneMode(!voiceCloneMode)}
+              className={`w-11 h-6 rounded-full transition-all relative ${voiceCloneMode ? 'bg-violet-500' : 'bg-white/10'}`}
+            >
+              <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform bg-white ${voiceCloneMode ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+          {showRefInfo && (
+            <p className="text-[11px] text-white/40 mb-3 leading-relaxed">
+              Upload a 5–10 second audio clip and provide its transcript. The AI will clone the voice style from that clip and apply it to your entire dialogue.
+            </p>
+          )}
+
+          {voiceCloneMode && (
+            <div className="mt-4 space-y-4">
+              {/* Upload reference audio */}
+              {!refAudioFile ? (
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Reference Audio <span className="text-violet-400">*</span></label>
+                  <button
+                    onClick={() => refAudioInputRef.current?.click()}
+                    disabled={isUploadingAudio}
+                    className="w-full py-3 border border-dashed border-violet-500/30 rounded-xl text-xs text-violet-400/70 hover:border-violet-500/60 hover:text-violet-400 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isUploadingAudio ? (
+                      <><div className="w-3 h-3 border border-violet-400 border-t-transparent rounded-full animate-spin" /> Uploading...</>
+                    ) : (
+                      <><Upload size={14} /> Upload audio clip (5–10 seconds)</>
+                    )}
+                  </button>
+                  <input ref={refAudioInputRef} type="file" accept="audio/*" onChange={handleRefAudioUpload} className="hidden" />
+                  <p className="text-[10px] text-white/20 mt-1">WAV, MP3, M4A supported</p>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">Reference Audio</label>
+                  <div className="flex items-center gap-3 bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3">
+                    <Mic size={14} className="text-violet-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-white/80 truncate">{refAudioFile.name}</p>
+                      {refAudioLocal && <audio src={refAudioLocal} controls className="mt-1 h-7 w-full" />}
+                    </div>
+                    <button onClick={removeRefAudio} className="text-white/30 hover:text-red-400 transition-colors flex-shrink-0"><X size={14} /></button>
+                  </div>
+                </div>
+              )}
+
+              {/* Reference transcript */}
+              <div>
+                <label className="text-[10px] text-white/40 uppercase tracking-wider mb-2 block">
+                  Transcript of reference audio <span className="text-violet-400">*</span>
+                </label>
+                <textarea
+                  value={refText}
+                  onChange={(e) => setRefText(e.target.value)}
+                  placeholder="Type exactly what is said in the reference audio, using [S1] [S2] tags if two speakers are present. E.g: [S1] Hey, how are you doing today?"
+                  rows={3}
+                  className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:border-violet-500/40 resize-none"
+                />
+                <p className="text-[10px] text-white/20 mt-1">Must match the audio exactly for best results</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Speaker legend */}
@@ -401,10 +466,10 @@ export default function DialogueTTS() {
             >
               {isGenerating ? (
                 <><div className="h-5 w-5 border-2 border-black border-t-transparent animate-spin rounded-full" />
-                  Generating audio...</>
+                  {voiceCloneMode ? 'Cloning voice & generating...' : 'Generating audio...'}</>
               ) : (
                 <><Sparkles size={20} />
-                  Generate Dialogue</>
+                  {voiceCloneMode ? 'Generate with Cloned Voice' : 'Generate Dialogue'}</>
               )}
             </button>
           )}
