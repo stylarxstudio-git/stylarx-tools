@@ -1,17 +1,30 @@
 'use client';
 import { useState, Suspense, useRef, useEffect } from 'react';
-import { Canvas, useLoader } from '@react-three/fiber';
-import { OrbitControls, Sphere, Environment } from '@react-three/drei';
-import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader';
 import { ArrowLeft, Sparkles, Download, X, Upload, GripVertical } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
+import dynamic from 'next/dynamic';
 import * as THREE from 'three';
 
+// Safari fix — dynamic imports prevent Three.js from crashing at module load time
+const Canvas = dynamic(() => import('@react-three/fiber').then(m => ({ default: m.Canvas })), { ssr: false });
+const OrbitControls = dynamic(() => import('@react-three/drei').then(m => ({ default: m.OrbitControls })), { ssr: false });
+const Sphere = dynamic(() => import('@react-three/drei').then(m => ({ default: m.Sphere })), { ssr: false });
+const Environment = dynamic(() => import('@react-three/drei').then(m => ({ default: m.Environment })), { ssr: false });
+
 function HDRIPreview({ textureUrl }) {
-  const isEXR = textureUrl.toLowerCase().endsWith('.exr');
-  const texture = useLoader(isEXR ? EXRLoader : THREE.TextureLoader, textureUrl);
-  texture.mapping = THREE.EquirectangularReflectionMapping;
+  const [texture, setTexture] = useState(null);
+  useEffect(() => {
+    const isEXR = textureUrl.toLowerCase().endsWith('.exr');
+    if (isEXR) {
+      import('three/examples/jsm/loaders/EXRLoader').then(({ EXRLoader }) => {
+        new EXRLoader().load(textureUrl, (t) => { t.mapping = THREE.EquirectangularReflectionMapping; setTexture(t); });
+      });
+    } else {
+      new THREE.TextureLoader().load(textureUrl, (t) => { t.mapping = THREE.EquirectangularReflectionMapping; setTexture(t); });
+    }
+  }, [textureUrl]);
+  if (!texture) return null;
   return (
     <>
       <Sphere args={[500, 60, 40]} scale={[-1, 1, 1]}>
@@ -41,9 +54,7 @@ export default function ImageToHDRI() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
-  useEffect(() => {
-    setPanelPosition({ x: window.innerWidth - 320, y: 120 });
-  }, []);
+  useEffect(() => { setPanelPosition({ x: window.innerWidth - 320, y: 120 }); }, []);
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -59,9 +70,11 @@ export default function ImageToHDRI() {
     if (!uploadedImage || !user) { alert('Please upload an image and log in first'); return; }
     setIsGenerating(true);
     try {
+      const { checkCredits } = await import('@/lib/credits');
+      await checkCredits(user.uid, 1);
+
       const response = await fetch('/api/generate-image-to-hdri', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: uploadedImage, format, userId: user.uid, userEmail: user.email }),
       });
       const data = await response.json();
@@ -80,54 +93,33 @@ export default function ImageToHDRI() {
   const handleDownload = async () => {
     if (!resultHDRI) return;
     try {
-      const response = await fetch(resultHDRI);
-      const blob = await response.blob();
+      const response = await fetch(resultHDRI); const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `hdri-${Date.now()}.${format.toLowerCase()}`;
-      document.body.appendChild(a); a.click();
-      window.URL.revokeObjectURL(url); document.body.removeChild(a);
+      const a = document.createElement('a'); a.href = url; a.download = `hdri-${Date.now()}.${format.toLowerCase()}`;
+      document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a);
     } catch { window.open(resultHDRI, '_blank'); }
   };
 
-  const handleMouseDown = (e) => {
-    if (e.target.closest('.drag-handle')) { setIsDragging(true); setDragOffset({ x: e.clientX - panelPosition.x, y: e.clientY - panelPosition.y }); }
-  };
-  const handleTouchStart = (e) => {
-    if (e.target.closest('.drag-handle')) { setIsDragging(true); const touch = e.touches[0]; setDragOffset({ x: touch.clientX - panelPosition.x, y: touch.clientY - panelPosition.y }); }
-  };
-  const handleMouseMove = (e) => {
-    if (isDragging) setPanelPosition({ x: Math.max(0, Math.min(window.innerWidth - 280, e.clientX - dragOffset.x)), y: Math.max(0, Math.min(window.innerHeight - 200, e.clientY - dragOffset.y)) });
-  };
-  const handleTouchMove = (e) => {
-    if (isDragging) { const touch = e.touches[0]; setPanelPosition({ x: Math.max(0, Math.min(window.innerWidth - 280, touch.clientX - dragOffset.x)), y: Math.max(0, Math.min(window.innerHeight - 200, touch.clientY - dragOffset.y)) }); }
-  };
+  const handleMouseDown = (e) => { if (e.target.closest('.drag-handle')) { setIsDragging(true); setDragOffset({ x: e.clientX - panelPosition.x, y: e.clientY - panelPosition.y }); } };
+  const handleTouchStart = (e) => { if (e.target.closest('.drag-handle')) { setIsDragging(true); const touch = e.touches[0]; setDragOffset({ x: touch.clientX - panelPosition.x, y: touch.clientY - panelPosition.y }); } };
+  const handleMouseMove = (e) => { if (isDragging) setPanelPosition({ x: Math.max(0, Math.min(window.innerWidth - 280, e.clientX - dragOffset.x)), y: Math.max(0, Math.min(window.innerHeight - 200, e.clientY - dragOffset.y)) }); };
+  const handleTouchMove = (e) => { if (isDragging) { const touch = e.touches[0]; setPanelPosition({ x: Math.max(0, Math.min(window.innerWidth - 280, touch.clientX - dragOffset.x)), y: Math.max(0, Math.min(window.innerHeight - 200, touch.clientY - dragOffset.y)) }); } };
   const handleMouseUp = () => setIsDragging(false);
 
   useEffect(() => {
     if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      window.addEventListener('touchmove', handleTouchMove);
-      window.addEventListener('touchend', handleMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-        window.removeEventListener('touchmove', handleTouchMove);
-        window.removeEventListener('touchend', handleMouseUp);
-      };
+      window.addEventListener('mousemove', handleMouseMove); window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('touchmove', handleTouchMove); window.addEventListener('touchend', handleMouseUp);
+      return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp); window.removeEventListener('touchmove', handleTouchMove); window.removeEventListener('touchend', handleMouseUp); };
     }
   }, [isDragging, dragOffset, panelPosition]);
 
   return (
     <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-white font-sans overflow-hidden relative">
       <div className="fixed inset-0 z-0">
-        {/* Canvas only after mount — never SSR */}
         {resultHDRI && mounted ? (
           <Canvas shadows camera={{ position: [0, 0, 0.1], fov: 75 }} gl={{ antialias: true }}>
-            <Suspense fallback={null}>
-              <HDRIPreview textureUrl={resultHDRI} />
-            </Suspense>
+            <Suspense fallback={null}><HDRIPreview textureUrl={resultHDRI} /></Suspense>
             <OrbitControls makeDefault enableZoom={true} enablePan={false} autoRotate={autoRotate} autoRotateSpeed={rotateSpeed} minDistance={0.1} maxDistance={490} zoomSpeed={3} rotateSpeed={0.5} />
           </Canvas>
         ) : uploadedImage ? (

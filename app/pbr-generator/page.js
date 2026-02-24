@@ -5,9 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useUser } from '@/hooks/useUser';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Sphere, Environment } from '@react-three/drei';
+import dynamic from 'next/dynamic';
 import * as THREE from 'three';
+
+const Canvas = dynamic(() => import('@react-three/fiber').then(m => ({ default: m.Canvas })), { ssr: false });
+const OrbitControls = dynamic(() => import('@react-three/drei').then(m => ({ default: m.OrbitControls })), { ssr: false });
+const Sphere = dynamic(() => import('@react-three/drei').then(m => ({ default: m.Sphere })), { ssr: false });
+const Environment = dynamic(() => import('@react-three/drei').then(m => ({ default: m.Environment })), { ssr: false });
 
 function MaterialPreview({ textureUrl }) {
   const texture = new THREE.TextureLoader().load(textureUrl);
@@ -80,6 +84,9 @@ export default function PBRGenerator() {
     setIsGenerating(true);
     const generatedMaps = {};
     try {
+      const { checkCredits } = await import('@/lib/credits');
+      await checkCredits(user.uid, calculateCredits());
+
       setGenerationProgress('Generating base texture...');
       const albedoRes = await fetch('/api/generate-pbr-generator', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, userId: user.uid, userEmail: user.email, step: 'albedo', resolution, seamless, style, category }) });
       const albedoData = await albedoRes.json();
@@ -149,7 +156,6 @@ export default function PBRGenerator() {
   return (
     <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-white font-sans overflow-hidden relative">
       <div className="fixed inset-0 z-0 bg-[#0a0a0a]">
-        {/* Canvas only after mount */}
         {resultMaps.albedo && showPreview && mounted ? (
           <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
             <Suspense fallback={null}>
@@ -210,7 +216,6 @@ export default function PBRGenerator() {
           <div className="bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl p-6 max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold mb-3">What is Seamless/Tileable?</h3>
             <p className="text-sm text-white/80 mb-4">Seamless textures have edges that loop perfectly, allowing you to repeat them infinitely without visible seams.</p>
-            <div className="text-sm text-white/70 space-y-2 mb-4"><p><strong>Essential for:</strong></p><ul className="list-disc list-inside space-y-1 ml-2"><li>Game development (floors, walls)</li><li>3D modeling (large surfaces)</li><li>Professional rendering</li></ul></div>
             <button onClick={() => setShowSeamlessInfo(false)} className="w-full py-2 bg-white text-black font-bold rounded-lg hover:bg-gray-100 transition-all">Got it!</button>
           </div>
         </div>
