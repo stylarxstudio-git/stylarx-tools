@@ -3,20 +3,49 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { useRouter } from 'next/navigation';
 
 const UserContext = createContext();
+const CACHE_KEY = 'stylarx_user';
+
+function getCachedUser() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const { user, ts } = JSON.parse(raw);
+    // Cache valid for 30 minutes
+    if (Date.now() - ts > 30 * 60 * 1000) { localStorage.removeItem(CACHE_KEY); return null; }
+    return user;
+  } catch { return null; }
+}
+
+function setCachedUser(user) {
+  try {
+    if (user) localStorage.setItem(CACHE_KEY, JSON.stringify({ user, ts: Date.now() }));
+    else localStorage.removeItem(CACHE_KEY);
+  } catch {}
+}
 
 export function UserProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Start with cached user immediately — no loading flash for returning visitors
+  const [user, setUser] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    return getCachedUser();
+  });
+  // Only show loading spinner if there's no cache
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return getCachedUser() === null;
+  });
   const router = useRouter();
 
   const formatUser = useCallback((outsetaUser) => {
     if (!outsetaUser) return null;
     let renewalDate = null;
-    if (outsetaUser?.Account?.CurrentSubscription?.RenewalDate) {
+    const dateStr = outsetaUser?.Account?.CurrentSubscription?.RenewalDate
+      || outsetaUser?.Account?.CurrentSubscription?.BillingRenewalDate;
+    if (dateStr) {
       try {
-        const date = new Date(outsetaUser.Account.CurrentSubscription.RenewalDate);
-        renewalDate = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-      } catch (e) {}
+        const d = new Date(dateStr);
+        if (!isNaN(d)) renewalDate = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+      } catch {}
     }
     return {
       email: outsetaUser.Email,
@@ -29,34 +58,54 @@ export function UserProvider({ children }) {
 
   const tryGetUser = useCallback(async () => {
     if (typeof window === 'undefined') { setLoading(false); return; }
-    if (!window.Outseta) { setLoading(false); return; } // no SDK = not logged in, not loading
+
+    // Poll for Outseta SDK — every 100ms, max 2 seconds total
+    let attempts = 0;
+    while (!window.Outseta && attempts < 20) {
+      await new Promise(r => setTimeout(r, 100));
+      attempts++;
+    }
+
+    if (!window.Outseta) {
+      // SDK never loaded = not logged in
+      setUser(null);
+      setCachedUser(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       const outsetaUser = await window.Outseta.getUser();
-      setUser(formatUser(outsetaUser));
-    } catch (err) {
+      const formatted = formatUser(outsetaUser);
+      setUser(formatted);
+      setCachedUser(formatted);
+    } catch {
       setUser(null);
+      setCachedUser(null);
     } finally {
-      setLoading(false); // ALWAYS resolve loading
+      setLoading(false);
     }
   }, [formatUser]);
 
   useEffect(() => {
-    // Try immediately, then retry once after 1s in case Outseta loads slowly
+    // Always verify in background even when cache exists
     tryGetUser();
-    const retry = setTimeout(tryGetUser, 1000);
 
-    // Hard fallback — no matter what, stop loading after 3 seconds
-    const fallback = setTimeout(() => setLoading(false), 3000);
-
-    const handleUpdate = (e) => { setUser(formatUser(e.detail)); setLoading(false); };
-    const handleLogout = () => { setUser(null); setLoading(false); };
+    const handleUpdate = (e) => {
+      const formatted = formatUser(e.detail);
+      setUser(formatted);
+      setCachedUser(formatted);
+      setLoading(false);
+    };
+    const handleLogout = () => {
+      setUser(null);
+      setCachedUser(null);
+      setLoading(false);
+    };
 
     window.addEventListener('outseta.set_user', handleUpdate);
     window.addEventListener('outseta.logout', handleLogout);
-
     return () => {
-      clearTimeout(retry);
-      clearTimeout(fallback);
       window.removeEventListener('outseta.set_user', handleUpdate);
       window.removeEventListener('outseta.logout', handleLogout);
     };
@@ -65,10 +114,11 @@ export function UserProvider({ children }) {
   const logout = async () => {
     if (typeof window !== 'undefined' && window.Outseta) {
       await window.Outseta.logout();
-      setUser(null);
-      router.push('/');
-      router.refresh();
     }
+    setUser(null);
+    setCachedUser(null);
+    router.push('/');
+    router.refresh();
   };
 
   return (
