@@ -365,16 +365,107 @@ export default function ImageToPBR() {
     );
   };
 
+  // Generate roughness map client-side: desaturate + boost contrast
+  const generateRoughnessMap = (imageSrc) => new Promise((resolve) => {
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height);
+      for (let i = 0; i < d.data.length; i += 4) {
+        // Luminance → roughness (bright areas = smooth, dark = rough, inverted)
+        const lum = 0.299 * d.data[i] + 0.587 * d.data[i+1] + 0.114 * d.data[i+2];
+        // Invert and boost contrast
+        const rough = Math.min(255, Math.max(0, 255 - ((lum - 128) * 1.4 + 128)));
+        d.data[i] = d.data[i+1] = d.data[i+2] = rough;
+      }
+      ctx.putImageData(d, 0, 0);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.src = imageSrc;
+  });
+
+  // Generate AO map client-side: darken, boost shadows, edge emphasis
+  const generateAOMap = (imageSrc) => new Promise((resolve) => {
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height);
+      for (let i = 0; i < d.data.length; i += 4) {
+        const lum = 0.299 * d.data[i] + 0.587 * d.data[i+1] + 0.114 * d.data[i+2];
+        // Darken shadows, compress highlights — AO is dark in crevices
+        const ao = Math.min(255, Math.max(0, Math.pow(lum / 255, 1.8) * 255));
+        d.data[i] = d.data[i+1] = d.data[i+2] = ao;
+      }
+      ctx.putImageData(d, 0, 0);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.src = imageSrc;
+  });
+
+  // Convert depth greyscale → proper RGB normal map via Sobel filter
+  const depthToNormal = (depthSrc) => new Promise((resolve) => {
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const w = img.width, h = img.height;
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const src = ctx.getImageData(0, 0, w, h);
+      const out = ctx.createImageData(w, h);
+      const get = (x, y) => {
+        x = Math.max(0, Math.min(w - 1, x));
+        y = Math.max(0, Math.min(h - 1, y));
+        const i = (y * w + x) * 4;
+        return src.data[i] / 255;
+      };
+      const strength = 4.0;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          // Sobel X and Y
+          const dX = (
+            -get(x-1,y-1) - 2*get(x-1,y) - get(x-1,y+1) +
+             get(x+1,y-1) + 2*get(x+1,y) + get(x+1,y+1)
+          ) * strength;
+          const dY = (
+            -get(x-1,y-1) - 2*get(x,y-1) - get(x+1,y-1) +
+             get(x-1,y+1) + 2*get(x,y+1) + get(x+1,y+1)
+          ) * strength;
+          // Normalize to RGB normal map (128,128,255 = flat surface)
+          const len = Math.sqrt(dX*dX + dY*dY + 1);
+          const i = (y * w + x) * 4;
+          out.data[i]   = Math.round((-dX / len * 0.5 + 0.5) * 255); // R
+          out.data[i+1] = Math.round((-dY / len * 0.5 + 0.5) * 255); // G
+          out.data[i+2] = Math.round((1   / len * 0.5 + 0.5) * 255); // B (always positive = blue)
+          out.data[i+3] = 255;
+        }
+      }
+      ctx.putImageData(out, 0, 0);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.src = depthSrc;
+  });
+
   const handleGenerate = async () => {
     if (!uploadedImage || !user) return;
     setIsGenerating(true);
+
     const composited = await compositeToCanvas(uploadedImage, {
       tileCount, tileRotation, tileSkewX, tileSkewY, edgeBlend, seamBlend,
       lightNorm, lightStrength, lightAngle,
       individualRotation, tileRotations,
     });
 
-    // Compress to max 1024px JPEG before sending — prevents payload too large errors
+    // Compress before sending to API
     const compressed = await new Promise((resolve) => {
       const img = new window.Image();
       img.onload = () => {
@@ -390,25 +481,46 @@ export default function ImageToPBR() {
     });
 
     const generatedMaps = { original: composited };
+
     try {
-      if (selectedMaps.normal) {
-        setGenerationProgress('Generating maps...');
-        const res = await fetch('/api/generate-image-to-pbr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: compressed, userId: user.uid, userEmail: user.email, step: 'normal', resolution, seamless: pbSeamless }),
-        });
-        const data = await res.json();
-        if (data.status === 'succeeded') generatedMaps.normal = data.output;
+      // Step 1: Depth map (used for height + to derive normal)
+      setGenerationProgress('Generating depth map...');
+      const depthRes = await fetch('/api/generate-image-to-pbr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: compressed, step: 'depth' }),
+      });
+      const depthData = await depthRes.json();
+      if (depthData.status === 'succeeded') {
+        generatedMaps.height = depthData.output; // depth = height map
+        // Step 2: Convert depth → proper normal map client-side
+        setGenerationProgress('Converting to normal map...');
+        generatedMaps.normal = await depthToNormal(depthData.output);
       }
+
+      // Step 3: Roughness — client-side canvas
+      setGenerationProgress('Generating roughness map...');
+      generatedMaps.roughness = await generateRoughnessMap(composited);
+
+      // Step 4: AO — client-side canvas
+      setGenerationProgress('Generating AO map...');
+      generatedMaps.ao = await generateAOMap(composited);
+
       setResultMaps(generatedMaps);
 
       const { deductCredits } = await import('@/lib/credits');
       const { saveGeneration } = await import('@/lib/generations');
       await deductCredits(user.uid, calculateCredits());
-      await saveGeneration({ outsetaUid: user.uid, toolName: 'Image to PBR', prompt: 'Texture conversion', imageUrl: generatedMaps.normal || generatedMaps.original, creditsUsed: calculateCredits() });
+      await saveGeneration({
+        outsetaUid: user.uid,
+        toolName: 'Image to PBR',
+        prompt: 'Texture conversion',
+        imageUrl: generatedMaps.normal || generatedMaps.original,
+        creditsUsed: calculateCredits(),
+      });
     } catch (err) {
-      alert('Error generating PBR maps');
+      console.error(err);
+      alert('Error generating PBR maps: ' + err.message);
     } finally {
       setIsGenerating(false);
       setGenerationProgress('');
@@ -417,9 +529,23 @@ export default function ImageToPBR() {
 
   const handleDownloadAll = async () => {
     const zip = new JSZip();
-    const fi = async (url, fn) => { const r = await fetch(url); const b = await r.blob(); zip.file(fn, b); };
-    if (resultMaps.normal) await fi(resultMaps.normal, 'pbr_normal.png');
-    if (resultMaps.original) await fi(resultMaps.original, 'pbr_original.png');
+    const addToZip = async (url, filename) => {
+      if (!url) return;
+      // data URLs can be added directly
+      if (url.startsWith('data:')) {
+        const base64 = url.split(',')[1];
+        zip.file(filename, base64, { base64: true });
+      } else {
+        const r = await fetch(url);
+        const b = await r.blob();
+        zip.file(filename, b);
+      }
+    };
+    await addToZip(resultMaps.original,  'pbr_albedo.png');
+    await addToZip(resultMaps.normal,    'pbr_normal.png');
+    await addToZip(resultMaps.height,    'pbr_height.png');
+    await addToZip(resultMaps.roughness, 'pbr_roughness.png');
+    await addToZip(resultMaps.ao,        'pbr_ao.png');
     saveAs(await zip.generateAsync({ type: 'blob' }), 'pbr_maps.zip');
   };
 
@@ -432,11 +558,17 @@ export default function ImageToPBR() {
           </Canvas>
         ) : resultMaps.normal ? (
           <div className="w-full h-full overflow-auto p-8">
-            <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4">
-              {['original', 'normal'].map(m => resultMaps[m] && (
-                <div key={m} className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                  <p className="text-xs text-white/60 mb-2 uppercase font-bold">{m}</p>
-                  <img src={resultMaps[m]} alt={m} className="w-full rounded-lg" />
+            <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {[
+                { key: 'original', label: 'Albedo' },
+                { key: 'normal', label: 'Normal' },
+                { key: 'height', label: 'Height' },
+                { key: 'roughness', label: 'Roughness' },
+                { key: 'ao', label: 'AO' },
+              ].map(({ key, label }) => resultMaps[key] && (
+                <div key={key} className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                  <p className="text-xs text-white/60 mb-2 uppercase font-bold">{label}</p>
+                  <img src={resultMaps[key]} alt={label} className="w-full rounded-lg" />
                 </div>
               ))}
             </div>
@@ -548,7 +680,7 @@ export default function ImageToPBR() {
       <footer className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-4xl px-6 text-center">
         {resultMaps.normal ? (
           <div className="flex gap-3 justify-center">
-            <button onClick={() => setResultMaps({ normal: null, original: null })} className="px-8 py-3.5 bg-white/10 text-white rounded-2xl font-bold border border-white/10">Reset</button>
+            <button onClick={() => setResultMaps({ original: null, normal: null, height: null, roughness: null, ao: null })} className="px-8 py-3.5 bg-white/10 text-white rounded-2xl font-bold border border-white/10">Reset</button>
             <button onClick={handleDownloadAll} className="px-8 py-3.5 bg-white text-black rounded-2xl font-bold flex items-center gap-2"><Package size={16} /> Download All</button>
           </div>
         ) : (
