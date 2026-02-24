@@ -9,10 +9,45 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Sphere, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 
-// Minimum scale factor to guarantee no gaps at any rotation angle
+// Minimum scale to guarantee no gaps at any rotation angle
 function getMinScale(angleDeg) {
   const rad = (angleDeg * Math.PI) / 180;
   return Math.abs(Math.cos(rad)) + Math.abs(Math.sin(rad));
+}
+
+// Extra scale to cover corners after skew — tan-based, not linear
+function getSkewScale(skewXDeg, skewYDeg) {
+  const tx = Math.tan((Math.abs(skewXDeg) * Math.PI) / 180);
+  const ty = Math.tan((Math.abs(skewYDeg) * Math.PI) / 180);
+  return 1 + tx + ty;
+}
+
+// Draw a feathered edge blend between tiles on a canvas
+// Paints soft gradients over each tile boundary to dissolve seams
+function applySeamFeather(ctx, total, tileSize, tileCount, featherSize) {
+  if (tileCount <= 1 || featherSize <= 0) return;
+  ctx.save();
+  for (let i = 1; i < tileCount; i++) {
+    const x = i * tileSize;
+    const y = i * tileSize;
+    // Vertical seam
+    const gv = ctx.createLinearGradient(x - featherSize, 0, x + featherSize, 0);
+    gv.addColorStop(0, 'rgba(0,0,0,0)');
+    gv.addColorStop(0.5, 'rgba(0,0,0,0.45)');
+    gv.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gv;
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillRect(x - featherSize, 0, featherSize * 2, total);
+    // Horizontal seam
+    const gh = ctx.createLinearGradient(0, y - featherSize, 0, y + featherSize);
+    gh.addColorStop(0, 'rgba(0,0,0,0)');
+    gh.addColorStop(0.5, 'rgba(0,0,0,0.45)');
+    gh.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gh;
+    ctx.fillRect(0, y - featherSize, total, featherSize * 2);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
 }
 
 function MaterialPreview({ textureUrl }) {
@@ -41,6 +76,8 @@ function compositeToCanvas(imageSrc, settings) {
       } = settings;
       const tileSize = 1024;
       const total = tileCount * tileSize;
+
+      // Offscreen canvas per tile — we draw each tile isolated then stamp it
       const canvas = document.createElement('canvas');
       canvas.width = total;
       canvas.height = total;
@@ -53,11 +90,18 @@ function compositeToCanvas(imageSrc, settings) {
           const angle = individualRotation
             ? (tileRotations[row * tileCount + col] || 0)
             : tileRotation;
-          // Scale to guarantee full fill at this angle + extra for skew
-          const minScale = getMinScale(angle) * (1 + Math.abs(tileSkewX) / 100 + Math.abs(tileSkewY) / 100);
-          const drawSize = tileSize * minScale;
+
+          // Combine rotation scale + skew scale for guaranteed full coverage
+          const rotScale = getMinScale(angle);
+          const skewScale = getSkewScale(tileSkewX, tileSkewY);
+          const drawSize = tileSize * rotScale * skewScale;
 
           ctx.save();
+          ctx.beginPath();
+          // Clip to exact tile cell so overflow from this tile never bleeds
+          ctx.rect(col * tileSize, row * tileSize, tileSize, tileSize);
+          ctx.clip();
+
           ctx.translate(cx, cy);
           ctx.rotate((angle * Math.PI) / 180);
           ctx.transform(1, tileSkewY / 100, tileSkewX / 100, 1, 0, 0);
@@ -66,12 +110,33 @@ function compositeToCanvas(imageSrc, settings) {
         }
       }
 
+      // Seam feather pass — dissolves visible tile boundaries
       if (seamBlend > 0 && tileCount > 1) {
+        const featherSize = tileSize * seamBlend * 0.5;
+        // Draw a second offset layer underneath to fill feathered gaps
         const tmp = document.createElement('canvas');
         tmp.width = total; tmp.height = total;
-        tmp.getContext('2d').drawImage(canvas, 0, 0);
-        ctx.globalAlpha = seamBlend;
-        ctx.drawImage(tmp, tileSize / 2, tileSize / 2, total, total, 0, 0, total, total);
+        const tctx = tmp.getContext('2d');
+        // Draw offset version (half tile offset) to fill seam areas
+        for (let row = -1; row <= tileCount; row++) {
+          for (let col = -1; col <= tileCount; col++) {
+            const ox = col * tileSize + tileSize / 2;
+            const oy = row * tileSize + tileSize / 2;
+            const idx = ((row % tileCount) + tileCount) % tileCount * tileCount +
+                        ((col % tileCount) + tileCount) % tileCount;
+            const angle = individualRotation ? (tileRotations[idx] || 0) : tileRotation;
+            const drawSize = tileSize * getMinScale(angle) * getSkewScale(tileSkewX, tileSkewY);
+            tctx.save();
+            tctx.translate(ox + tileSize / 2, oy + tileSize / 2);
+            tctx.rotate((angle * Math.PI) / 180);
+            tctx.transform(1, tileSkewY / 100, tileSkewX / 100, 1, 0, 0);
+            tctx.drawImage(img, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+            tctx.restore();
+          }
+        }
+        // Blend offset layer over seam boundaries
+        ctx.globalAlpha = Math.min(seamBlend * 1.5, 1);
+        ctx.drawImage(tmp, 0, 0);
         ctx.globalAlpha = 1;
       }
 
@@ -214,20 +279,21 @@ export default function ImageToPBR() {
     setSelectedMaps(p => ({ ...p, [k]: !p[k] }));
   };
 
-  // CSS preview tile: always fills with object-fit cover + scale for rotation gaps
+  // CSS preview tile: always fills with correct scale for both rotation AND skew
   const getTileStyle = (tileIdx) => {
     const angle = individualRotation
       ? (tileRotations[tileIdx] || 0)
       : tileRotation;
-    const minScale = getMinScale(angle) * (1 + (Math.abs(tileSkewX) + Math.abs(tileSkewY)) / 100);
+    const rotScale = getMinScale(angle);
+    const skewScale = getSkewScale(tileSkewX, tileSkewY);
+    const totalScale = rotScale * skewScale;
     return {
       width: '100%',
       height: '100%',
       objectFit: 'cover',
       position: 'absolute',
       top: 0, left: 0,
-      // Scale up enough to guarantee full fill, then rotate + skew
-      transform: `scale(${minScale}) rotate(${angle}deg) skewX(${tileSkewX}deg) skewY(${tileSkewY}deg)`,
+      transform: `scale(${totalScale}) rotate(${angle}deg) skewX(${tileSkewX}deg) skewY(${tileSkewY}deg)`,
       transformOrigin: 'center center',
     };
   };
