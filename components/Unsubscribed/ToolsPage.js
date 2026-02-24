@@ -111,7 +111,7 @@ export default function ToolsPage() {
       name: 'Dialogue TTS', 
       description: 'Generate two-character dialogue audio from scripts.', 
       credits: 1, 
-      thumbnail: '/Dialogue-TTS-Thumbnail.jpg',
+      thumbnail: '/Dialogue-TTS-Thumbnail.png',
       path: '/dialogue-tts',
       themeColor: '#a78bfa' 
     }
