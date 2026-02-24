@@ -373,6 +373,22 @@ export default function ImageToPBR() {
       lightNorm, lightStrength, lightAngle,
       individualRotation, tileRotations,
     });
+
+    // Compress to max 1024px JPEG before sending — prevents payload too large errors
+    const compressed = await new Promise((resolve) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const maxSize = 1024;
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = composited;
+    });
+
     const generatedMaps = { original: composited };
     try {
       if (selectedMaps.normal) {
@@ -380,7 +396,7 @@ export default function ImageToPBR() {
         const res = await fetch('/api/generate-image-to-pbr', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: composited, userId: user.uid, userEmail: user.email, step: 'normal', resolution, seamless: pbSeamless }),
+          body: JSON.stringify({ image: compressed, userId: user.uid, userEmail: user.email, step: 'normal', resolution, seamless: pbSeamless }),
         });
         const data = await res.json();
         if (data.status === 'succeeded') generatedMaps.normal = data.output;

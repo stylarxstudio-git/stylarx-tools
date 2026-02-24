@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server';
 import { fal } from '@fal-ai/client';
 
-fal.config({
-  credentials: process.env.FAL_KEY,
-});
+fal.config({ credentials: process.env.FAL_KEY });
+
+export const maxDuration = 120;
 
 async function toFalUrl(image) {
-  // If it's already a real URL, use it directly
   if (image.startsWith('http')) return image;
-
-  // If it's base64, upload it to fal's storage first
   const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
   const buffer = Buffer.from(base64Data, 'base64');
   const blob = new Blob([buffer], { type: 'image/png' });
@@ -22,11 +19,14 @@ export async function POST(req) {
   try {
     const { image, userId, userEmail, step, resolution, seamless } = await req.json();
 
+    if (!image) return NextResponse.json({ error: 'No image provided' }, { status: 400 });
+
     if (step === 'normal' || step === 'height') {
       const imageUrl = await toFalUrl(image);
 
       const result = await fal.subscribe('fal-ai/imageutils/marigold-depth', {
         input: { image_url: imageUrl },
+        logs: true,
       });
 
       const outputUrl = result?.image?.url || result?.data?.image?.url;
