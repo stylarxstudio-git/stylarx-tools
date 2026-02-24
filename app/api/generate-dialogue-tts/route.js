@@ -3,62 +3,46 @@ import { fal } from '@fal-ai/client';
 
 fal.config({ credentials: process.env.FAL_KEY });
 
-export const maxDuration = 120;
+export const maxDuration = 60;
+
+// Female voices for S1, male voices for S2 (distinct by default)
+const S1_VOICE = 'af_heart';   // warm female
+const S2_VOICE = 'am_echo';    // clear male
 
 export async function POST(request) {
   try {
-    const { lines, refAudioUrl, refText } = await request.json();
+    const { lines } = await request.json();
 
     if (!lines?.length) {
       return NextResponse.json({ error: 'No dialogue lines provided' }, { status: 400 });
     }
 
-    const text = lines
-      .map(line => `[S${line.speaker}] ${line.text.trim()}`)
-      .join('\n');
-
-    if (!text.trim()) {
+    const validLines = lines.filter(l => l.text?.trim());
+    if (!validLines.length) {
       return NextResponse.json({ error: 'Dialogue is empty' }, { status: 400 });
     }
 
-    const useVoiceClone = !!(refAudioUrl && refText?.trim());
-
-    let result;
-
-    if (useVoiceClone) {
-      // If it's a base64 data URL, upload to fal storage first to get a real URL
-      let audioUrl = refAudioUrl;
-      if (refAudioUrl.startsWith('data:')) {
-        const base64Data = refAudioUrl.split(',')[1];
-        const mimeType = refAudioUrl.split(';')[0].split(':')[1];
-        const buffer = Buffer.from(base64Data, 'base64');
-        const blob = new Blob([buffer], { type: mimeType });
-        audioUrl = await fal.storage.upload(blob);
-      }
-
-      result = await fal.subscribe('fal-ai/dia-tts/voice-clone', {
+    // Generate each line individually with the correct voice
+    // Run all in parallel for speed
+    const audioPromises = validLines.map(line =>
+      fal.subscribe('fal-ai/kokoro/american-english', {
         input: {
-          text,
-          ref_audio_url: audioUrl,
-          ref_text: refText.trim(),
+          prompt: line.text.trim(),
+          voice: line.speaker === 1 ? S1_VOICE : S2_VOICE,
         },
-        logs: true,
-      });
-    } else {
-      result = await fal.subscribe('fal-ai/dia-tts', {
-        input: { text },
-        logs: true,
-      });
-    }
+      })
+    );
 
-    const audioUrl = result?.audio?.url || result?.data?.audio?.url;
+    const results = await Promise.all(audioPromises);
 
-    if (!audioUrl) {
-      console.error('dia-tts result:', JSON.stringify(result, null, 2));
-      throw new Error('No audio returned from model');
-    }
+    // Collect ordered audio URLs
+    const audioUrls = results.map((result, i) => {
+      const url = result?.audio?.url || result?.data?.audio?.url;
+      if (!url) throw new Error(`No audio for line ${i + 1}`);
+      return url;
+    });
 
-    return NextResponse.json({ status: 'succeeded', audioUrl });
+    return NextResponse.json({ status: 'succeeded', audioUrls });
 
   } catch (error) {
     console.error('TTS error:', error);
