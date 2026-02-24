@@ -149,7 +149,14 @@ export default function DialogueTTS() {
         body: JSON.stringify(body),
       });
 
-      const data = await response.json();
+      // Read as text first so we can show the real error if it's not JSON
+      const rawText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(`Server error (${response.status}): ${rawText.slice(0, 200)}`);
+      }
       if (data.error) throw new Error(data.error);
 
       if (data.status === 'succeeded' && data.audioUrl) {
