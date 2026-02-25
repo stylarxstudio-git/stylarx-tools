@@ -23,12 +23,12 @@ export default function ToolsPage() {
     { id: 'depth-map', name: 'Depth Map Generator', description: 'Convert photos into 3D height maps for displacement.', credits: 1, thumbnail: '/Depth-Map-Thumbnail.jpg', path: '/depth-map', themeColor: '#9333EA' },
     { id: 'image-to-pbr', name: 'Image to PBR', description: 'Convert photos into complete PBR texture sets.', credits: 2, thumbnail: '/Image-to-PBR-Thumbnail.png', path: '/image-to-pbr', themeColor: '#000000' },
     { id: 'pbr-generator', name: 'PBR Generator', description: 'Generate complete PBR materials from text prompts.', credits: 3, thumbnail: '/PBR-Generator-Thumbnail.png', path: '/pbr-generator', themeColor: '#1700e7' },
-    { id: 'decal-generator', name: 'Decal Generator', description: 'Generate transparent decals and overlays for 3D, VFX, and design.', credits: 1, thumbnail: '/Decal-Generator-Thumbnail.jpg', path: '/decal-generator', themeColor: '#EF4444' },
+    { id: 'decal-generator', name: 'Decal Generator', description: 'Generate transparent decals and overlays for 3D, VFX, and design.', credits: 1, thumbnail: '/Decal-Generator-Thumbnail.jpg', path: '/decal-generator', themeColor: '#EF4444', hidden: true },
     { id: 'sfx-generator', name: 'SFX Generator', description: 'Generate studio-quality sound effects from text descriptions.', credits: 1, thumbnail: '/SFX-Generator-Thumbnail.png', path: '/sfx-generator', themeColor: '#10B981' },
     { id: 'rig-animation', name: 'AI Rig Animation', description: 'Generate skeletal animations from text prompts.', credits: 2, thumbnail: '/RigAnimationThumbnail.png', path: '/rig-animation', themeColor: '#ff0000' },
     { id: 'dialogue-tts', name: 'Dialogue TTS', description: 'Generate two-character dialogue audio from scripts.', credits: 1, thumbnail: '/Dialogue-TTS-Thumbnail.png', path: '/dialogue-tts', themeColor: '#a78bfa' },
     { id: 'sticker-generator', name: 'Sticker Generator', description: 'Generate transparent stickers, emojis, graffiti & more.', credits: 1, thumbnail: '/Sticker-Generator-Thumbnail.png', path: '/sticker-generator', themeColor: '#f97316' },
-    { id: 'scene-elements', name: 'Scene Elements', description: 'Realistic transparent cutouts for scenes & compositing.', credits: 1, thumbnail: '/Scene-Elements-Thumbnail.png', path: '/scene-elements', themeColor: '#22c55e' },
+    { id: 'scene-elements', name: 'Scene Elements', description: 'Realistic transparent cutouts for scenes & compositing.', credits: 1, thumbnail: '/Scene-Elements-Thumbnail.jpg', path: '/scene-elements', themeColor: '#eaff00' },
   ];
 
   const handleGetStarted = () => {
