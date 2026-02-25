@@ -28,7 +28,7 @@ export default function ToolsPage() {
     { id: 'rig-animation', name: 'AI Rig Animation', description: 'Generate skeletal animations from text prompts.', credits: 2, thumbnail: '/RigAnimationThumbnail.png', path: '/rig-animation', themeColor: '#ff0000' },
     { id: 'dialogue-tts', name: 'Dialogue TTS', description: 'Generate two-character dialogue audio from scripts.', credits: 1, thumbnail: '/Dialogue-TTS-Thumbnail.png', path: '/dialogue-tts', themeColor: '#a78bfa' },
     { id: 'sticker-generator', name: 'Sticker Generator', description: 'Generate transparent stickers, emojis, graffiti & more.', credits: 1, thumbnail: '/Sticker-Generator-Thumbnail.png', path: '/sticker-generator', themeColor: '#f97316' },
-    { id: 'scene-elements', name: 'Scene Elements', description: 'Realistic transparent cutouts for scenes & compositing.', credits: 1, thumbnail: '/Scene-Elements-Thumbnail.png', path: '/scene-elements', themeColor: '#22c55e' },
+    { id: 'scene-elements', name: 'Scene Elements', description: 'Realistic transparent cutouts for scenes & compositing.', credits: 1, thumbnail: '/Scene-Elements-Thumbnail.jpg', path: '/scene-elements', themeColor: '#22c55e' },
   ];
 
   const handleGetStarted = () => {
