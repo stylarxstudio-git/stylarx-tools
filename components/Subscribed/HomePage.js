@@ -5,12 +5,23 @@ import Image from 'next/image';
 import { useUser } from '@/hooks/useUser';
 import MobileHeader from '@/components/MobileHeader';
 
+function formatLocalDate(utcString) {
+  if (!utcString) return { date: '—', time: '—' };
+  const normalized = utcString.endsWith('Z') || utcString.includes('+') ? utcString : utcString + 'Z';
+  const d = new Date(normalized);
+  if (isNaN(d)) return { date: '—', time: '—' };
+  return {
+    date: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+    time: d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
 export default function SubscribedHomePage() {
   const [suggestion, setSuggestion] = useState('');
   const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
   const { user, logout } = useUser();
 
-  const [userData, setUserData] = useState(null); // null = still loading
+  const [userData, setUserData] = useState(null);
   const [recentHistory, setRecentHistory] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
 
@@ -45,14 +56,18 @@ export default function SubscribedHomePage() {
         const activity = await getRecentActivity(outsetaUser.Uid);
 
         if (activity) {
-          setRecentHistory(activity.map(item => ({
-            id: item.id, product: item.tool_name,
-            date: new Date(item.created_at).toLocaleDateString(),
-            time: new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            status: item.status || 'Successful',
-            prompt: item.prompt?.length > 30 ? item.prompt.substring(0, 30) + '...' : item.prompt,
-            fullPrompt: item.prompt,
-          })));
+          setRecentHistory(activity.map(item => {
+            const { date, time } = formatLocalDate(item.created_at);
+            return {
+              id: item.id,
+              product: item.tool_name,
+              date,
+              time,
+              status: item.status || 'Successful',
+              prompt: item.prompt?.length > 30 ? item.prompt.substring(0, 30) + '...' : item.prompt,
+              fullPrompt: item.prompt,
+            };
+          }));
         }
 
         const sub = outsetaUser.Account.CurrentSubscription;
@@ -108,7 +123,6 @@ export default function SubscribedHomePage() {
               <p className="text-xs sm:text-sm text-gray-600 mt-1">Here is your statistics from last month</p>
             </div>
 
-            {/* Stats — skeleton until data loads */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
               {dataLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
@@ -157,7 +171,6 @@ export default function SubscribedHomePage() {
               </div>
             </div>
 
-            {/* Recent Activity */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between">
                 <h3 className="text-sm sm:text-base font-bold text-gray-900">Recent Activity</h3>
@@ -194,6 +207,7 @@ export default function SubscribedHomePage() {
                 </div>
               )}
             </div>
+
           </main>
         </div>
       </div>

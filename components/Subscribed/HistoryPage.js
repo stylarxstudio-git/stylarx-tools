@@ -5,6 +5,18 @@ import Image from 'next/image';
 import { useUser } from '@/hooks/useUser';
 import MobileHeader from '@/components/MobileHeader';
 
+function formatLocalDate(utcString) {
+  if (!utcString) return { date: '—', time: '—' };
+  // Ensure the string is treated as UTC by appending Z if missing
+  const normalized = utcString.endsWith('Z') || utcString.includes('+') ? utcString : utcString + 'Z';
+  const d = new Date(normalized);
+  if (isNaN(d)) return { date: '—', time: '—' };
+  return {
+    date: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+    time: d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
 export default function SubscribedHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -30,16 +42,18 @@ export default function SubscribedHistoryPage() {
           const outsetaUser = await window.Outseta.getUser();
           const { getRecentActivity } = await import('@/lib/generations');
           const data = await getRecentActivity(outsetaUser.Uid, null);
-          
-          setHistory(data.map(item => ({
-            id: item.id,
-            product: item.tool_name,
-            date: new Date(item.created_at).toLocaleDateString(),
-            time: new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            status: item.status || 'Successful',
-            prompt: item.prompt?.length > 40 ? item.prompt.substring(0, 40) + '...' : item.prompt,
-            fullPrompt: item.prompt
-          })));
+          setHistory(data.map(item => {
+            const { date, time } = formatLocalDate(item.created_at);
+            return {
+              id: item.id,
+              product: item.tool_name,
+              date,
+              time,
+              status: item.status || 'Successful',
+              prompt: item.prompt?.length > 40 ? item.prompt.substring(0, 40) + '...' : item.prompt,
+              fullPrompt: item.prompt,
+            };
+          }));
         } catch (err) { console.error('❌ Failed to load history:', err); }
       }
     };
@@ -48,19 +62,13 @@ export default function SubscribedHistoryPage() {
 
   const filteredHistory = history.filter(item =>
     item.product.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.fullPrompt.toLowerCase().includes(searchQuery.toLowerCase())
+    item.fullPrompt?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <>
       <MobileHeader />
       <div className="flex min-h-screen bg-[#F8F9FB] font-['Poppins',sans-serif]">
-        <button onClick={() => setSidebarOpen(!sidebarOpen)} className="hidden">
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3 rounded-r-xl shadow-lg">
-            <ChevronLeft size={24} className={`transition-transform ${sidebarOpen ? '' : 'rotate-180'}`} />
-          </div>
-        </button>
-
         <aside className="hidden lg:flex w-60 bg-white border-r border-gray-200 flex-col fixed h-screen z-40">
           <div className="p-4 border-b border-gray-100">
             <h1 className="text-lg font-black text-gray-900 flex items-center gap-2">
@@ -120,9 +128,9 @@ export default function SubscribedHistoryPage() {
                           </td>
                           <td className="px-3 sm:px-4 py-4 text-xs sm:text-sm text-gray-600 max-w-[200px] truncate">{item.prompt}</td>
                           <td className="px-3 sm:px-4 py-4 flex items-center gap-2">
-                              <button onClick={() => navigator.clipboard.writeText(item.fullPrompt)} className="p-1.5 hover:bg-gray-100 rounded-md transition-colors" title="Copy"><Copy size={14} className="text-gray-500" /></button>
-                              <button onClick={() => handleRegenerate(item)} className="p-1.5 hover:bg-gray-100 rounded-md transition-colors" title="Regenerate"><RotateCcw size={14} className="text-gray-500" /></button>
-                              <button onClick={() => handleDelete(item.id)} className="p-1.5 hover:bg-red-50 rounded-md transition-colors group" title="Delete"><Trash2 size={14} className="text-gray-500 group-hover:text-red-500" /></button>
+                            <button onClick={() => navigator.clipboard.writeText(item.fullPrompt)} className="p-1.5 hover:bg-gray-100 rounded-md transition-colors" title="Copy"><Copy size={14} className="text-gray-500" /></button>
+                            <button onClick={() => handleRegenerate(item)} className="p-1.5 hover:bg-gray-100 rounded-md transition-colors" title="Regenerate"><RotateCcw size={14} className="text-gray-500" /></button>
+                            <button onClick={() => handleDelete(item.id)} className="p-1.5 hover:bg-red-50 rounded-md transition-colors group" title="Delete"><Trash2 size={14} className="text-gray-500 group-hover:text-red-500" /></button>
                           </td>
                         </tr>
                       ))}
