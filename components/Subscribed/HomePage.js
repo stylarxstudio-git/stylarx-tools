@@ -1,5 +1,5 @@
 'use client';
-import { Home, Wrench, Clock, HelpCircle, LogOut, Copy, Trash2 } from 'lucide-react';
+import { Home, Wrench, HelpCircle, LogOut, Copy, Trash2, Search } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useUser } from '@/hooks/useUser';
@@ -19,6 +19,7 @@ function formatLocalDate(utcString) {
 export default function SubscribedHomePage() {
   const [suggestion, setSuggestion] = useState('');
   const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { user, logout } = useUser();
 
   const [userData, setUserData] = useState(null);
@@ -48,7 +49,7 @@ export default function SubscribedHomePage() {
         );
 
         const stats = await getGenerationStats(outsetaUser.Uid);
-        const activity = await getRecentActivity(outsetaUser.Uid);
+        const activity = await getRecentActivity(outsetaUser.Uid, 15);
 
         if (activity) {
           setRecentHistory(activity.map(item => {
@@ -59,7 +60,7 @@ export default function SubscribedHomePage() {
               date,
               time,
               status: item.status || 'Successful',
-              prompt: item.prompt?.length > 30 ? item.prompt.substring(0, 30) + '...' : item.prompt,
+              prompt: item.prompt?.length > 40 ? item.prompt.substring(0, 40) + '...' : item.prompt,
               fullPrompt: item.prompt,
             };
           }));
@@ -91,6 +92,11 @@ export default function SubscribedHomePage() {
     loadUserData();
   }, []);
 
+  const filteredHistory = recentHistory.filter(item =>
+    item.product?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.fullPrompt?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <>
       <MobileHeader />
@@ -102,7 +108,6 @@ export default function SubscribedHomePage() {
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
             <a href="/" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-900 bg-gray-100 rounded-lg font-medium"><Home size={16} /> Dashboard</a>
             <a href="/tools" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-all"><Wrench size={16} /> Tools</a>
-            <a href="/history" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-all"><Clock size={16} /> History</a>
           </nav>
           <div className="p-3 border-t border-gray-100 space-y-1 pb-28">
             <a href="/contact" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-all"><HelpCircle size={16} /> Help / contact</a>
@@ -166,15 +171,27 @@ export default function SubscribedHomePage() {
               </div>
             </div>
 
+            {/* Activity — now shows 15 rows with search */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="text-sm sm:text-base font-bold text-gray-900">Recent Activity</h3>
-                <a href="/history" className="text-xs sm:text-sm text-blue-600 hover:text-blue-700 font-medium">View All →</a>
+              <div className="p-3 sm:p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center gap-3">
+                <h3 className="text-sm sm:text-base font-bold text-gray-900 shrink-0">Generation History</h3>
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                  <input
+                    type="text"
+                    placeholder="Search by tool or prompt..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder:text-gray-400"
+                  />
+                </div>
               </div>
               {dataLoading ? (
                 <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-300" /></div>
-              ) : recentHistory.length === 0 ? (
-                <div className="flex items-center justify-center py-12 px-4 italic text-gray-400 text-sm">No activity in the last 30 days.</div>
+              ) : filteredHistory.length === 0 ? (
+                <div className="flex items-center justify-center py-12 px-4 italic text-gray-400 text-sm">
+                  {searchQuery ? 'No results found.' : 'No activity in the last 30 days.'}
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[600px]">
@@ -182,17 +199,22 @@ export default function SubscribedHomePage() {
                       <tr>{['Product','Date','Time','Status','Prompt','Action'].map(h => <th key={h} className="px-3 sm:px-4 py-2 text-left text-xs font-bold text-gray-600 uppercase">{h}</th>)}</tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {recentHistory.map((item) => (
+                      {filteredHistory.map((item) => (
                         <tr key={item.id} className="hover:bg-gray-50">
-                          <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900">{item.product}</td>
-                          <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-600">{item.date}</td>
-                          <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-600">{item.time}</td>
-                          <td className="px-3 sm:px-4 py-2"><span className={`text-xs font-medium px-2 py-0.5 rounded-full ${item.status === 'Successful' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{item.status}</span></td>
-                          <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-600 flex items-center gap-2">{item.prompt}<button onClick={() => navigator.clipboard.writeText(item.fullPrompt)} className="p-1 hover:bg-gray-100 rounded"><Copy size={12} className="text-gray-400" /></button></td>
-                          <td className="px-3 sm:px-4 py-2">
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => handleDelete(item.id)} className="p-1 hover:bg-gray-100 rounded"><Trash2 size={14} className="text-gray-600" /></button>
+                          <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 whitespace-nowrap">{item.product}</td>
+                          <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-600 whitespace-nowrap">{item.date}</td>
+                          <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-600 whitespace-nowrap">{item.time}</td>
+                          <td className="px-3 sm:px-4 py-2 whitespace-nowrap">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${item.status === 'Successful' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{item.status}</span>
+                          </td>
+                          <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-600">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate max-w-[180px]">{item.prompt}</span>
+                              <button onClick={() => navigator.clipboard.writeText(item.fullPrompt)} className="p-1 hover:bg-gray-100 rounded shrink-0"><Copy size={12} className="text-gray-400" /></button>
                             </div>
+                          </td>
+                          <td className="px-3 sm:px-4 py-2 whitespace-nowrap">
+                            <button onClick={() => handleDelete(item.id)} className="p-1.5 hover:bg-red-50 rounded group"><Trash2 size={14} className="text-gray-400 group-hover:text-red-500" /></button>
                           </td>
                         </tr>
                       ))}
