@@ -37,7 +37,7 @@ export default function ToolsPage() {
     }
   };
 
-  const filteredTools = tools.filter(tool => tool.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredTools = tools.filter(tool => !tool.hidden && tool.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <>
