@@ -16,10 +16,10 @@ export default function ToolsPage() {
   const FOUNDER_PLAN_UID = '7ma2MXQE';
 
   const tools = [
-    { id: 'gobo', name: 'Gobo Generator', description: 'Studio-quality lighting stencils.', credits: 1, thumbnail: '/Gobo-Generator-Thumbnail1.jpg', path: '/gobo-generator', themeColor: '#ffef14' },
-    { id: 'scene-stager', name: 'AI Scene Stager', description: 'Stage 3D models in photorealistic scenes.', credits: 1, thumbnail: '/Scene-Gen-Thumbnail.jpg', path: '/scene-stager', themeColor: '#7000FF' },
+    { id: 'gobo', name: 'Gobo Generator', description: 'Studio-quality lighting stencils.', credits: 1, thumbnail: '/Gobo-Generator-Thumbnail.jpg', path: '/gobo-generator', themeColor: '#8e8e8e' },
+    { id: 'scene-stager', name: 'AI Scene Stager', description: 'Stage 3D models in photorealistic scenes.', credits: 1, thumbnail: '/Scene-Gen-Thumbnail1.jpg', path: '/scene-stager', themeColor: '#5b5d5e' },
     { id: 'hdri-gen', name: 'AI HDRI Generator', description: 'Create immersive 360° lighting environments.', credits: 1, thumbnail: '/hdri-generator-thumbnail.jpg', path: '/hdri-generator', themeColor: '#00D1FF', hidden: true },
-    { id: 'image-to-hdri', name: 'Image to HDRI', description: 'Convert any image into a 360° HDRI environment.', credits: 1, thumbnail: '/Image-to-HDRI-Thumbnail.jpg', path: '/image-to-hdri', themeColor: '#00ff48' },
+    { id: 'image-to-hdri', name: 'Image to HDRI', description: 'Convert any image into a 360° HDRI environment.', credits: 1, thumbnail: '/Image-to-HDRI-Thumbnail.jpg', path: '/image-to-hdri', themeColor: '#001aff' },
     { id: 'depth-map', name: 'Depth Map Generator', description: 'Convert photos into 3D height maps for displacement.', credits: 1, thumbnail: '/Depth-Map-Thumbnail.jpg', path: '/depth-map', themeColor: '#9333EA' },
     { id: 'image-to-pbr', name: 'Image to PBR', description: 'Convert photos into complete PBR texture sets.', credits: 2, thumbnail: '/Image-to-PBR-Thumbnail.png', path: '/image-to-pbr', themeColor: '#000000' },
     { id: 'pbr-generator', name: 'PBR Generator', description: 'Generate complete PBR materials from text prompts.', credits: 3, thumbnail: '/PBR-Generator-Thumbnail.png', path: '/pbr-generator', themeColor: '#1700e7' },
@@ -28,7 +28,7 @@ export default function ToolsPage() {
     { id: 'rig-animation', name: 'AI Rig Animation', description: 'Generate skeletal animations from text prompts.', credits: 2, thumbnail: '/RigAnimationThumbnail.png', path: '/rig-animation', themeColor: '#ff0000' },
     { id: 'dialogue-tts', name: 'Dialogue TTS', description: 'Generate two-character dialogue audio from scripts.', credits: 1, thumbnail: '/Dialogue-TTS-Thumbnail.png', path: '/dialogue-tts', themeColor: '#a78bfa' },
     { id: 'sticker-generator', name: 'Sticker Generator', description: 'Generate transparent stickers, emojis, graffiti & more.', credits: 1, thumbnail: '/Sticker-Generator-Thumbnail.png', path: '/sticker-generator', themeColor: '#f97316' },
-    { id: 'scene-elements', name: 'Scene Elements', description: 'Realistic transparent cutouts for scenes & compositing.', credits: 1, thumbnail: '/Scene-Elements-Thumbnail.jpg', path: '/scene-elements', themeColor: '#22c55e' },
+    { id: 'scene-elements', name: 'Scene Elements', description: 'Realistic transparent cutouts for scenes & compositing.', credits: 1, thumbnail: '/Scene-Elements-Thumbnail.jpg', path: '/scene-elements', themeColor: '#fbff00' },
   ];
 
   const handleGetStarted = () => {
