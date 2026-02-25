@@ -12,12 +12,13 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No prompt provided' }, { status: 400 });
     }
 
-    // Step 1: Generate with Flux Lightning — fast, high quality
-    const fluxResult = await fal.subscribe('fal-ai/flux/lightning-4step', {
+    // Step 1: Generate with Flux Dev — better realism for nature/scene elements
+    const fluxResult = await fal.subscribe('fal-ai/flux/dev', {
       input: {
         prompt: prompt.trim(),
         image_size: 'square_hd',
-        num_inference_steps: 4,
+        num_inference_steps: 28,
+        guidance_scale: 3.5,
         num_images: 1,
         enable_safety_checker: true,
       },

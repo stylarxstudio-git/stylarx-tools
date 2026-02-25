@@ -12,7 +12,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No prompt provided' }, { status: 400 });
     }
 
-    // Step 1: Generate with Flux Schnell
+    // Step 1: Generate with Flux Schnell — fast, great for stylized stickers
     const fluxResult = await fal.subscribe('fal-ai/flux/schnell', {
       input: {
         prompt: prompt.trim(),
@@ -26,12 +26,17 @@ export async function POST(request) {
     const generatedUrl = fluxResult?.images?.[0]?.url || fluxResult?.data?.images?.[0]?.url;
     if (!generatedUrl) throw new Error('No image returned from Flux');
 
-    // Step 2: Remove background with rembg
-    const rembgResult = await fal.subscribe('fal-ai/imageutils/rembg', {
-      input: { image_url: generatedUrl },
+    // Step 2: Use BiRefNet for clean, sharp cutouts (much better than rembg for stickers)
+    const birefnetResult = await fal.subscribe('fal-ai/birefnet', {
+      input: {
+        image_url: generatedUrl,
+        model: 'General Use (Light)',
+        operating_resolution: '1024x1024',
+        output_format: 'png',
+      },
     });
 
-    const finalUrl = rembgResult?.image?.url || rembgResult?.data?.image?.url;
+    const finalUrl = birefnetResult?.image?.url || birefnetResult?.data?.image?.url;
     if (!finalUrl) throw new Error('Background removal failed');
 
     return NextResponse.json({ imageUrl: finalUrl });
