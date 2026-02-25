@@ -18,7 +18,7 @@ export default function ToolsPage() {
   const tools = [
     { id: 'gobo', name: 'Gobo Generator', description: 'Studio-quality lighting stencils.', credits: 1, thumbnail: '/Gobo-Generator-Thumbnail1.jpg', path: '/gobo-generator', themeColor: '#ffef14' },
     { id: 'scene-stager', name: 'AI Scene Stager', description: 'Stage 3D models in photorealistic scenes.', credits: 1, thumbnail: '/Scene-Gen-Thumbnail.jpg', path: '/scene-stager', themeColor: '#7000FF' },
-    { id: 'hdri-gen', name: 'AI HDRI Generator', description: 'Create immersive 360° lighting environments.', credits: 1, thumbnail: '/hdri-generator-thumbnail.jpg', path: '/hdri-generator', themeColor: '#00D1FF' },
+    { id: 'hdri-gen', name: 'AI HDRI Generator', description: 'Create immersive 360° lighting environments.', credits: 1, thumbnail: '/hdri-generator-thumbnail.jpg', path: '/hdri-generator', themeColor: '#00D1FF', hidden: true },
     { id: 'image-to-hdri', name: 'Image to HDRI', description: 'Convert any image into a 360° HDRI environment.', credits: 1, thumbnail: '/Image-to-HDRI-Thumbnail.jpg', path: '/image-to-hdri', themeColor: '#00ff48' },
     { id: 'depth-map', name: 'Depth Map Generator', description: 'Convert photos into 3D height maps for displacement.', credits: 1, thumbnail: '/Depth-Map-Thumbnail.jpg', path: '/depth-map', themeColor: '#9333EA' },
     { id: 'image-to-pbr', name: 'Image to PBR', description: 'Convert photos into complete PBR texture sets.', credits: 2, thumbnail: '/Image-to-PBR-Thumbnail.png', path: '/image-to-pbr', themeColor: '#000000' },
