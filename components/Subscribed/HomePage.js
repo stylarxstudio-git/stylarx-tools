@@ -1,5 +1,5 @@
 'use client';
-import { Home, Wrench, Clock, HelpCircle, LogOut, Copy, RotateCcw, Trash2 } from 'lucide-react';
+import { Home, Wrench, Clock, HelpCircle, LogOut, Copy, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useUser } from '@/hooks/useUser';
@@ -28,11 +28,6 @@ export default function SubscribedHomePage() {
   const handleDelete = async (id) => {
     const { deleteGeneration } = await import('@/lib/generations');
     if (await deleteGeneration(id)) setRecentHistory(prev => prev.filter(item => item.id !== id));
-  };
-
-  const handleRegenerate = (item) => {
-    const toolSlug = item.product.toLowerCase().replace(/\s+/g, '-');
-    window.location.href = `/tools/${toolSlug}?prompt=${encodeURIComponent(item.fullPrompt)}`;
   };
 
   useEffect(() => {
@@ -196,7 +191,6 @@ export default function SubscribedHomePage() {
                           <td className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-600 flex items-center gap-2">{item.prompt}<button onClick={() => navigator.clipboard.writeText(item.fullPrompt)} className="p-1 hover:bg-gray-100 rounded"><Copy size={12} className="text-gray-400" /></button></td>
                           <td className="px-3 sm:px-4 py-2">
                             <div className="flex items-center gap-1">
-                              <button onClick={() => handleRegenerate(item)} className="p-1 hover:bg-gray-100 rounded"><RotateCcw size={14} className="text-gray-600" /></button>
                               <button onClick={() => handleDelete(item.id)} className="p-1 hover:bg-gray-100 rounded"><Trash2 size={14} className="text-gray-600" /></button>
                             </div>
                           </td>

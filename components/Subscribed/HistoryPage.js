@@ -1,5 +1,5 @@
 'use client';
-import { Home, Wrench, Clock, HelpCircle, LogOut, Search, Copy, RotateCcw, Trash2, ChevronLeft } from 'lucide-react';
+import { Home, Wrench, Clock, HelpCircle, LogOut, Search, Copy, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useUser } from '@/hooks/useUser';
@@ -28,11 +28,6 @@ export default function SubscribedHistoryPage() {
     if (await deleteGeneration(id)) {
       setHistory(prev => prev.filter(item => item.id !== id));
     }
-  };
-
-  const handleRegenerate = (item) => {
-    const toolSlug = item.product.toLowerCase().replace(/\s+/g, '-');
-    window.location.href = `/tools/${toolSlug}?prompt=${encodeURIComponent(item.fullPrompt)}`;
   };
 
   useEffect(() => {
