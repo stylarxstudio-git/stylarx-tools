@@ -27,7 +27,7 @@ export default function ToolsPage() {
     { id: 'sfx-generator', name: 'SFX Generator', description: 'Generate studio-quality sound effects from text descriptions.', credits: 1, thumbnail: '/SFX-Generator-Thumbnail.jpg', path: '/sfx-generator', themeColor: '#3b3b3b' },
     { id: 'rig-animation', name: 'AI Rig Animation', description: 'Generate skeletal animations from text prompts.', credits: 2, thumbnail: '/RigAnimationThumbnail.jpg', path: '/rig-animation', themeColor: '#b700ff' },
     { id: 'dialogue-tts', name: 'Dialogue TTS', description: 'Generate two-character dialogue audio from scripts.', credits: 1, thumbnail: '/Dialogue-TTS-Thumbnail.jpg', path: '/dialogue-tts', themeColor: '#494949' },
-    { id: 'sticker-generator', name: 'Sticker Generator', description: 'Generate transparent stickers, emojis, graffiti & more.', credits: 1, thumbnail: '/Sticker-Generator-Thumbnail.png', path: '/sticker-generator', themeColor: '#009dff' },
+    { id: 'sticker-generator', name: 'Sticker Generator', description: 'Generate transparent stickers, emojis, graffiti & more.', credits: 1, thumbnail: '/Sticker-Generator-Thumbnail1.png', path: '/sticker-generator', themeColor: '#009dff' },
     { id: 'scene-elements', name: 'Scene Elements', description: 'Realistic transparent cutouts for scenes & compositing.', credits: 1, thumbnail: '/Scene-Elements-Thumbnail.jpg', path: '/scene-elements', themeColor: '#fbff00' },
   ];
 
