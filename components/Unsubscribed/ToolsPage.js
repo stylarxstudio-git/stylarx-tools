@@ -25,9 +25,9 @@ export default function ToolsPage() {
     { id: 'pbr-generator', name: 'PBR Generator', description: 'Generate complete PBR materials from text prompts.', credits: 3, thumbnail: '/PBR-Generator-Thumbnail1.png', path: '/pbr-generator', themeColor: '#000000' },
     { id: 'decal-generator', name: 'Decal Generator', description: 'Generate transparent decals and overlays for 3D, VFX, and design.', credits: 1, thumbnail: '/Decal-Generator-Thumbnail.jpg', path: '/decal-generator', themeColor: '#EF4444', hidden: true },
     { id: 'sfx-generator', name: 'SFX Generator', description: 'Generate studio-quality sound effects from text descriptions.', credits: 1, thumbnail: '/SFX-Generator-Thumbnail.jpg', path: '/sfx-generator', themeColor: '#3b3b3b' },
-    { id: 'rig-animation', name: 'AI Rig Animation', description: 'Generate skeletal animations from text prompts.', credits: 2, thumbnail: '/RigAnimationThumbnail.png', path: '/rig-animation', themeColor: '#ff0000' },
+    { id: 'rig-animation', name: 'AI Rig Animation', description: 'Generate skeletal animations from text prompts.', credits: 2, thumbnail: '/RigAnimationThumbnail.jpg', path: '/rig-animation', themeColor: '#b700ff' },
     { id: 'dialogue-tts', name: 'Dialogue TTS', description: 'Generate two-character dialogue audio from scripts.', credits: 1, thumbnail: '/Dialogue-TTS-Thumbnail.jpg', path: '/dialogue-tts', themeColor: '#494949' },
-    { id: 'sticker-generator', name: 'Sticker Generator', description: 'Generate transparent stickers, emojis, graffiti & more.', credits: 1, thumbnail: '/Sticker-Generator-Thumbnail.png', path: '/sticker-generator', themeColor: '#f97316' },
+    { id: 'sticker-generator', name: 'Sticker Generator', description: 'Generate transparent stickers, emojis, graffiti & more.', credits: 1, thumbnail: '/Sticker-Generator-Thumbnail.png', path: '/sticker-generator', themeColor: '#009dff' },
     { id: 'scene-elements', name: 'Scene Elements', description: 'Realistic transparent cutouts for scenes & compositing.', credits: 1, thumbnail: '/Scene-Elements-Thumbnail.jpg', path: '/scene-elements', themeColor: '#fbff00' },
   ];
 
