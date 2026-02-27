@@ -9,49 +9,49 @@ const CATEGORIES = [
     id: 'foliage',
     label: '🌿 Foliage',
     items: ['Maple leaf', 'Oak leaf', 'Tropical palm leaf', 'Fern frond', 'Ivy cluster', 'Bamboo branch', 'Pine needles', 'Eucalyptus leaves'],
-    prompt: 'photorealistic, highly detailed, studio lighting, clean subject',
+    prompt: 'botanical specimen, natural colors, visible veins and texture',
   },
   {
     id: 'flowers',
     label: '🌸 Flowers',
     items: ['Red rose in bloom', 'Cherry blossom branch', 'Sunflower head', 'Lavender sprig', 'White daisy', 'Lotus flower', 'Wildflower bouquet', 'Peony bloom'],
-    prompt: 'photorealistic macro photography, beautiful, detailed petals',
+    prompt: 'botanical flower specimen, detailed petals, natural colors, fresh and vibrant',
   },
   {
     id: 'grass',
     label: '🌾 Grass & Plants',
     items: ['Tall grass blades', 'Wheat stalks', 'Wild grass cluster', 'Reeds and cattails', 'Moss clump', 'Clover patch', 'Dandelion', 'Succulent plant'],
-    prompt: 'photorealistic, natural, highly detailed, studio quality',
+    prompt: 'botanical plant specimen, natural texture, organic detail',
   },
   {
     id: 'trees',
     label: '🌲 Trees & Branches',
     items: ['Pine tree', 'Cherry blossom tree', 'Oak tree', 'Bare winter tree', 'Birch trunk', 'Willow branch', 'Dead branch', 'Autumn tree'],
-    prompt: 'photorealistic, detailed bark and leaves, natural lighting',
+    prompt: 'realistic tree or branch, detailed bark texture, natural lighting',
   },
   {
     id: 'nature',
     label: '🪨 Nature Elements',
     items: ['Rock formation', 'Smooth river stones', 'Piece of driftwood', 'Mushroom cluster', 'Pinecone', 'Feather', 'Seashell', 'Crystal cluster'],
-    prompt: 'photorealistic, detailed texture, studio quality, natural',
+    prompt: 'natural object, realistic texture, detailed surface',
   },
   {
     id: 'atmospheric',
     label: '☁️ Atmospheric',
     items: ['Wispy cloud', 'Storm cloud', 'Smoke puff', 'Fog mist', 'Snowflakes', 'Rain drops', 'Falling leaves', 'Dust particles'],
-    prompt: 'photorealistic, atmospheric, high quality render, soft edges',
+    prompt: 'atmospheric element, soft edges, realistic particles',
   },
 ];
 
 const EXAMPLES = [
-  'Detailed maple leaf with autumn colors',
-  'Large tropical palm leaf',
-  'Wild grass blades swaying',
-  'Cherry blossom branch in spring',
-  'Weathered driftwood piece',
-  'Cluster of mushrooms on moss',
-  'Wispy cirrus clouds',
-  'Smooth river stones',
+  'Detailed maple leaf with autumn orange and red colors',
+  'Large tropical palm leaf with water droplets',
+  'Wild grass blades with morning dew',
+  'Cherry blossom branch in full spring bloom',
+  'Weathered gray driftwood piece with natural texture',
+  'Cluster of brown mushrooms growing on green moss',
+  'Wispy white cirrus clouds in sunlight',
+  'Collection of smooth river stones with natural colors',
 ];
 
 export default function SceneElementsGenerator() {
@@ -69,26 +69,42 @@ export default function SceneElementsGenerator() {
   const usePreset = (item) => setPrompt(item);
 
   const handleGenerate = async () => {
-    if (!prompt.trim() || !user) { alert('Enter a prompt and make sure you are logged in'); return; }
+    if (!prompt.trim() || !user) { 
+      alert('Enter a prompt and make sure you are logged in'); 
+      return; 
+    }
+
     setIsGenerating(true);
     setResult(null);
-    try {
-      const { checkCredits } = await import('@/lib/credits');
-      await checkCredits(user.uid, 1);
 
-      const fullPrompt = `${prompt.trim()}, ${category.prompt}, isolated on white background, no other elements`;
+    try {
+      // Check credits first
+      const { getUserCredits } = await import('@/lib/credits');
+      const userCredits = await getUserCredits(user.uid);
+      
+      if (!userCredits || userCredits.credits_remaining < 1) {
+        throw new Error('Insufficient credits. This generation requires 1 credit.');
+      }
+
+      // Build enhanced prompt
+      const fullPrompt = `${prompt.trim()}, ${category.prompt}`;
 
       const response = await fetch('/api/generate-scene-element', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: fullPrompt }),
       });
+
       const data = await response.json();
       if (data.error) throw new Error(data.error);
+      
       if (data.imageUrl) {
         setResult(data.imageUrl);
+
+        // Deduct credits and save generation
         const { deductCredits } = await import('@/lib/credits');
         const { saveGeneration } = await import('@/lib/generations');
+        
         await deductCredits(user.uid, 1);
         await saveGeneration({
           outsetaUid: user.uid,
@@ -97,14 +113,21 @@ export default function SceneElementsGenerator() {
           imageUrl: data.imageUrl,
           creditsUsed: 1,
         });
-      } else throw new Error('No image returned');
-    } catch (err) { alert(err.message || 'Generation failed'); }
-    finally { setIsGenerating(false); }
+      } else {
+        throw new Error('No image returned');
+      }
+
+    } catch (err) { 
+      alert(err.message || 'Generation failed'); 
+    } finally { 
+      setIsGenerating(false); 
+    }
   };
 
   const handleDownload = async () => {
     if (!result) return;
     setIsDownloading(true);
+    
     try {
       const r = await fetch(result);
       const blob = await r.blob();
@@ -112,16 +135,20 @@ export default function SceneElementsGenerator() {
       const a = document.createElement('a');
       a.href = url;
       a.download = `scene-element-${Date.now()}.png`;
-      document.body.appendChild(a); a.click();
-      window.URL.revokeObjectURL(url); document.body.removeChild(a);
-    } catch { window.open(result, '_blank'); }
-    finally { setIsDownloading(false); }
+      document.body.appendChild(a); 
+      a.click();
+      window.URL.revokeObjectURL(url); 
+      document.body.removeChild(a);
+    } catch { 
+      window.open(result, '_blank'); 
+    } finally { 
+      setIsDownloading(false); 
+    }
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-[#0f0f0f] text-white font-sans">
 
-      {/* NAV */}
       <nav className="fixed top-0 left-0 w-full z-50 p-4 sm:p-6 flex items-center justify-between bg-[#0f0f0f]/80 backdrop-blur-md border-b border-white/5">
         <button onClick={() => router.push('/tools')} className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all text-sm font-medium">
           <ArrowLeft size={16} /> Back to Tools
@@ -131,16 +158,14 @@ export default function SceneElementsGenerator() {
 
       <main className="flex-1 pt-20 pb-44 px-4 sm:px-6 max-w-2xl mx-auto w-full">
 
-        {/* Header */}
         <div className="text-center mb-8 mt-4">
           <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/10 text-2xl">
             🌿
           </div>
           <h1 className="text-2xl font-black tracking-tight">Scene Elements</h1>
-          <p className="text-white/40 text-sm mt-1">Realistic transparent cutouts for scenes, backgrounds & compositing</p>
+          <p className="text-white/40 text-sm mt-1">Photorealistic transparent cutouts for scenes, backgrounds & compositing</p>
         </div>
 
-        {/* Category selector */}
         <div className="mb-6">
           <p className="text-[10px] text-white/40 uppercase tracking-wider font-bold mb-3">Category</p>
           <div className="grid grid-cols-3 gap-2">
@@ -160,7 +185,6 @@ export default function SceneElementsGenerator() {
           </div>
         </div>
 
-        {/* Quick presets */}
         <div className="mb-6">
           <p className="text-[10px] text-white/40 uppercase tracking-wider font-bold mb-3">Quick Presets</p>
           <div className="flex flex-wrap gap-2">
@@ -176,7 +200,6 @@ export default function SceneElementsGenerator() {
           </div>
         </div>
 
-        {/* Prompt */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[10px] text-white/40 uppercase tracking-wider font-bold">Prompt</p>
@@ -193,7 +216,6 @@ export default function SceneElementsGenerator() {
           />
         </div>
 
-        {/* Result */}
         {result && (
           <div className="mb-6">
             <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#1a1a1a]">
@@ -211,20 +233,18 @@ export default function SceneElementsGenerator() {
           </div>
         )}
 
-        {/* Tips */}
         <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-          <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-2">Tips</p>
+          <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-2">Pro Tips</p>
           <ul className="text-[11px] text-white/40 space-y-1 leading-relaxed">
-            <li>• Best results with a single clear subject — avoid complex scenes</li>
-            <li>• Add detail words: wet, dry, wilted, fresh, ancient, glowing</li>
-            <li>• Use presets for quick starting points then customize</li>
-            <li>• Download as PNG — transparency is preserved for compositing</li>
-            <li>• Works great layered in Blender, Photoshop, or After Effects</li>
+            <li>• <strong>Be specific:</strong> "Large tropical palm leaf with water droplets" works better than just "leaf"</li>
+            <li>• <strong>Add details:</strong> wet, dry, wilted, fresh, ancient, weathered, glowing</li>
+            <li>• <strong>Colors help:</strong> "Bright red maple leaf" vs "maple leaf"</li>
+            <li>• <strong>Single objects work best</strong> — avoid complex multi-element scenes</li>
+            <li>• <strong>Download as PNG</strong> — transparency preserved for Blender/Photoshop/After Effects</li>
           </ul>
         </div>
       </main>
 
-      {/* FOOTER */}
       <footer className="fixed bottom-0 left-0 w-full z-50 bg-gradient-to-t from-[#0f0f0f] via-[#0f0f0f]/95 to-transparent p-4 sm:p-6">
         <div className="max-w-2xl mx-auto">
           {result ? (

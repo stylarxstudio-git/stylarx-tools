@@ -12,27 +12,32 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No prompt provided' }, { status: 400 });
     }
 
-    // Step 1: Generate with Flux Dev — better realism for nature/scene elements
+    // ENHANCED PROMPT for photorealism + clean cutout
+    const enhancedPrompt = `${prompt.trim()}, professional product photography, isolated on pure white background, studio lighting, 8K resolution, highly detailed, photorealistic, sharp focus, macro photography, no shadows, centered composition, single subject only`;
+
+    // Step 1: Generate with Flux Dev
     const fluxResult = await fal.subscribe('fal-ai/flux/dev', {
       input: {
-        prompt: prompt.trim(),
-        image_size: 'square_hd',
-        num_inference_steps: 28,
+        prompt: enhancedPrompt,
+        image_size: 'square_hd', // 1024x1024
+        num_inference_steps: 40, // INCREASED from 28 (better quality)
         guidance_scale: 3.5,
         num_images: 1,
-        enable_safety_checker: true,
+        enable_safety_checker: false, // Don't block nature images
       },
     });
 
     const generatedUrl = fluxResult?.images?.[0]?.url || fluxResult?.data?.images?.[0]?.url;
     if (!generatedUrl) throw new Error('No image returned from Flux');
 
-    // Step 2: Remove background with rembg
-    const rembgResult = await fal.subscribe('fal-ai/imageutils/rembg', {
-      input: { image_url: generatedUrl },
+    // Step 2: Remove background with BiRefNet (better than rembg for nature)
+    const birefnetResult = await fal.subscribe('fal-ai/birefnet', {
+      input: { 
+        image_url: generatedUrl,
+      },
     });
 
-    const finalUrl = rembgResult?.image?.url || rembgResult?.data?.image?.url;
+    const finalUrl = birefnetResult?.image?.url || birefnetResult?.data?.image?.url;
     if (!finalUrl) throw new Error('Background removal failed');
 
     return NextResponse.json({ imageUrl: finalUrl });
